@@ -117,10 +117,24 @@ export function ProductCard({ product, onAdd, isFavorite, onToggleFavorite, onCl
                     fontSize: '1.2rem',
                     fontWeight: '800',
                     color: 'var(--color-primary)',
-                    marginBottom: '0.75rem'
+                    marginBottom: '0.25rem'
                 }}>
                     ${product.price.toFixed(2)}
                 </div>
+
+                {product.bonusPoints && (
+                    <div style={{
+                        fontSize: '0.75rem',
+                        color: '#e65100',
+                        fontWeight: 'bold',
+                        marginBottom: '0.75rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                    }}>
+                        <span>+{product.bonusPoints} Puntos</span>
+                    </div>
+                )}
 
                 <button
                     className="btn-add"
@@ -128,6 +142,7 @@ export function ProductCard({ product, onAdd, isFavorite, onToggleFavorite, onCl
                         e.stopPropagation();
                         onAdd(product, e);
                     }}
+                    style={{ marginTop: 'auto' }}
                 >
                     <Plus size={16} style={{ marginRight: '4px', strokeWidth: 3 }} />
                     Agregar

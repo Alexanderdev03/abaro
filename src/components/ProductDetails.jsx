@@ -1,8 +1,6 @@
 import React from 'react';
 import { X, Heart, ShoppingCart, Star, ChevronRight } from 'lucide-react';
-import { products } from '../data/products';
-
-export function ProductDetails({ product, onClose, onAdd, isFavorite, onToggleFavorite, onProductSelect }) {
+export function ProductDetails({ product, products, onClose, onAdd, isFavorite, onToggleFavorite, onProductSelect }) {
     if (!product) return null;
 
     // Mock description based on category

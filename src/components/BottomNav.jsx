@@ -1,96 +1,127 @@
 import React from 'react';
-import { Home, Grid, ShoppingCart, User } from 'lucide-react';
+import { Home, Grid, ShoppingCart, User, Settings } from 'lucide-react';
 
-export function BottomNav({ activeTab, onTabChange, cartCount }) {
-  const navItems = [
-    { id: 'home', icon: Home, label: 'Inicio' },
-    { id: 'categories', icon: Grid, label: 'Deptos' },
-    { id: 'cart', icon: ShoppingCart, label: 'Carrito', badge: cartCount },
-    { id: 'profile', icon: User, label: 'Cuenta' }
-  ];
-
+export function BottomNav({ activeTab, onTabChange, cartCount, isAnimating }) {
   return (
     <nav style={{
       position: 'fixed',
       bottom: 0,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: '100%',
-      maxWidth: '600px',
+      left: 0,
+      right: 0,
       backgroundColor: 'white',
       borderTop: '1px solid #eee',
-      padding: '0.25rem 1rem 0.5rem 1rem', // Reduced padding
       display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      borderTopLeftRadius: '1rem', // Slightly less rounded
-      borderTopRightRadius: '1rem',
-      boxShadow: '0 -2px 10px rgba(0,0,0,0.05)',
+      justifyContent: 'space-around',
+      padding: '0.75rem 0.5rem',
       zIndex: 1000,
-      height: '60px' // Fixed smaller height
+      boxShadow: '0 -2px 10px rgba(0,0,0,0.05)'
     }}>
-      {navItems.map(item => {
-        const Icon = item.icon;
-        const isActive = activeTab === item.id;
+      <button
+        onClick={() => onTabChange('home')}
+        style={{
+          background: 'none',
+          border: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          color: activeTab === 'home' ? 'var(--color-primary)' : '#999',
+          cursor: 'pointer'
+        }}
+      >
+        <Home size={24} />
+        <span style={{ fontSize: '0.7rem', marginTop: '4px' }}>Inicio</span>
+      </button>
 
-        return (
-          <button
-            key={item.id}
-            onClick={() => onTabChange(item.id)}
-            style={{
+      <button
+        onClick={() => onTabChange('categories')}
+        style={{
+          background: 'none',
+          border: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          color: activeTab === 'categories' ? 'var(--color-primary)' : '#999',
+          cursor: 'pointer'
+        }}
+      >
+        <Grid size={24} />
+        <span style={{ fontSize: '0.7rem', marginTop: '4px' }}>Deptos</span>
+      </button>
+
+      <button
+        onClick={() => onTabChange('cart')}
+        style={{
+          background: 'none',
+          border: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          color: activeTab === 'cart' ? 'var(--color-primary)' : '#999',
+          cursor: 'pointer',
+          position: 'relative'
+        }}
+      >
+        <div style={{ position: 'relative' }}>
+          <ShoppingCart
+            size={24}
+            className={isAnimating ? 'cart-shake' : ''}
+          />
+          {cartCount > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: '-8px',
+              right: '-8px',
+              backgroundColor: '#d32f2f',
+              color: 'white',
+              fontSize: '0.7rem',
+              fontWeight: 'bold',
+              width: '18px',
+              height: '18px',
+              borderRadius: '50%',
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
-              gap: '2px', // Reduced gap
-              color: isActive ? 'var(--color-primary)' : '#999',
-              position: 'relative',
-              padding: '0.25rem',
-              minWidth: '50px', // Reduced width
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            <div style={{ position: 'relative' }}>
-              {/* Special styling for active Home */}
-              {item.id === 'home' && isActive ? (
-                <div style={{
-                  backgroundColor: 'var(--color-primary)',
-                  borderRadius: '8px 8px 2px 2px',
-                  padding: '2px'
-                }}>
-                  <Icon size={20} color="white" fill="white" /> {/* Reduced icon size */}
-                </div>
-              ) : (
-                <Icon size={20} fill={isActive ? "currentColor" : "none"} /> // Reduced icon size
-              )}
-
-              {item.badge > 0 && (
-                <span style={{
-                  position: 'absolute',
-                  top: -4,
-                  right: -6,
-                  backgroundColor: 'var(--color-accent)',
-                  color: 'white',
-                  fontSize: '0.6rem',
-                  fontWeight: 'bold',
-                  width: '14px',
-                  height: '14px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  {item.badge}
-                </span>
-              )}
-            </div>
-            <span style={{ fontSize: '0.65rem', fontWeight: isActive ? '600' : '400' }}> {/* Reduced font size */}
-              {item.label}
+              justifyContent: 'center',
+              animation: 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+            }}>
+              {cartCount}
             </span>
-          </button>
-        );
-      })}
+          )}
+        </div>
+        <span style={{ fontSize: '0.7rem', marginTop: '4px' }}>Carrito</span>
+      </button>
+
+      <button
+        onClick={() => onTabChange('profile')}
+        style={{
+          background: 'none',
+          border: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          color: activeTab === 'profile' ? 'var(--color-primary)' : '#999',
+          cursor: 'pointer'
+        }}
+      >
+        <User size={24} />
+        <span style={{ fontSize: '0.7rem', marginTop: '4px' }}>Cuenta</span>
+      </button>
+
+      {/* Admin Tab (Temporary) */}
+      <button
+        onClick={() => onTabChange('admin')}
+        style={{
+          background: 'none',
+          border: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          color: activeTab === 'admin' ? 'var(--color-primary)' : '#999',
+          cursor: 'pointer'
+        }}
+      >
+        <Settings size={24} />
+        <span style={{ fontSize: '0.7rem', marginTop: '4px' }}>Admin</span>
+      </button>
     </nav>
   );
 }

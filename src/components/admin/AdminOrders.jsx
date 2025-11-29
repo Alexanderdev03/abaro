@@ -1,0 +1,162 @@
+import React, { useState, useEffect } from 'react';
+import { Clock, Package, Truck, CheckCircle, Search, Eye } from 'lucide-react';
+
+// Mock Order Service (We'll implement the real one next)
+const OrderService = {
+    getAllOrders: async () => {
+        // Simulate fetching from Firebase
+        return new Promise(resolve => {
+            setTimeout(() => {
+                const saved = localStorage.getItem('orders');
+                resolve(saved ? JSON.parse(saved) : []);
+            }, 500);
+        });
+    },
+    updateStatus: async (orderId, status) => {
+        // Simulate update
+        const saved = localStorage.getItem('orders');
+        if (saved) {
+            const orders = JSON.parse(saved);
+            const updated = orders.map(o => o.id === orderId ? { ...o, status } : o);
+            localStorage.setItem('orders', JSON.stringify(updated));
+        }
+        return true;
+    }
+};
+
+const STATUS_COLUMNS = [
+    { id: 'pending', label: 'Pendiente', icon: Clock, color: '#f59e0b', bg: '#fef3c7' },
+    { id: 'preparing', label: 'Preparando', icon: Package, color: '#3b82f6', bg: '#dbeafe' },
+    { id: 'shipping', label: 'En Camino', icon: Truck, color: '#8b5cf6', bg: '#ede9fe' },
+    { id: 'delivered', label: 'Entregado', icon: CheckCircle, color: '#10b981', bg: '#d1fae5' },
+];
+
+export function AdminOrders() {
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [draggedOrder, setDraggedOrder] = useState(null);
+
+    useEffect(() => {
+        loadOrders();
+    }, []);
+
+    const loadOrders = async () => {
+        setLoading(true);
+        const data = await OrderService.getAllOrders();
+        // Ensure orders have a status, default to 'pending'
+        const normalized = data.map(o => ({ ...o, status: o.status || 'pending' }));
+        setOrders(normalized);
+        setLoading(false);
+    };
+
+    const handleStatusChange = async (orderId, newStatus) => {
+        // Optimistic update
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+        await OrderService.updateStatus(orderId, newStatus);
+    };
+
+    const onDragStart = (e, order) => {
+        setDraggedOrder(order);
+    };
+
+    const onDragOver = (e) => {
+        e.preventDefault();
+    };
+
+    const onDrop = (e, status) => {
+        e.preventDefault();
+        if (draggedOrder && draggedOrder.status !== status) {
+            handleStatusChange(draggedOrder.id, status);
+        }
+        setDraggedOrder(null);
+    };
+
+    return (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#111827' }}>Tablero de Pedidos</h2>
+                <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
+                    Arrastra las tarjetas para cambiar el estado
+                </div>
+            </div>
+
+            <div style={{
+                display: 'flex', gap: '1.5rem', overflowX: 'auto', paddingBottom: '1rem', height: '100%'
+            }}>
+                {STATUS_COLUMNS.map(column => (
+                    <div
+                        key={column.id}
+                        onDragOver={onDragOver}
+                        onDrop={(e) => onDrop(e, column.id)}
+                        style={{
+                            flex: '1', minWidth: '280px', backgroundColor: '#f3f4f6',
+                            borderRadius: '12px', display: 'flex', flexDirection: 'column'
+                        }}
+                    >
+                        {/* Column Header */}
+                        <div style={{
+                            padding: '1rem', borderBottom: '1px solid #e5e7eb',
+                            display: 'flex', alignItems: 'center', gap: '0.5rem',
+                            backgroundColor: 'white', borderRadius: '12px 12px 0 0'
+                        }}>
+                            <div style={{
+                                padding: '0.25rem', borderRadius: '6px', backgroundColor: column.bg, color: column.color
+                            }}>
+                                <column.icon size={18} />
+                            </div>
+                            <span style={{ fontWeight: '600', color: '#374151' }}>{column.label}</span>
+                            <span style={{
+                                marginLeft: 'auto', backgroundColor: '#e5e7eb', padding: '0.1rem 0.5rem',
+                                borderRadius: '999px', fontSize: '0.75rem', fontWeight: '600'
+                            }}>
+                                {orders.filter(o => o.status === column.id).length}
+                            </span>
+                        </div>
+
+                        {/* Cards Container */}
+                        <div style={{ padding: '1rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {orders.filter(o => o.status === column.id).map(order => (
+                                <div
+                                    key={order.id}
+                                    draggable
+                                    onDragStart={(e) => onDragStart(e, order)}
+                                    style={{
+                                        backgroundColor: 'white', padding: '1rem', borderRadius: '8px',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'grab',
+                                        border: '1px solid #e5e7eb'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                                        <span style={{ fontWeight: '600', fontSize: '0.9rem' }}>#{order.id.slice(0, 8)}</span>
+                                        <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                                            {new Date(order.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+
+                                    <div style={{ marginBottom: '0.75rem' }}>
+                                        <div style={{ fontSize: '0.9rem', color: '#374151' }}>Total: <strong>${order.total.toFixed(2)}</strong></div>
+                                        <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{order.items.length} productos</div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.75rem', borderTop: '1px solid #f3f4f6' }}>
+                                        <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                                            {order.customerName || 'Cliente'}
+                                        </div>
+                                        <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#3b82f6' }}>
+                                            <Eye size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                            {orders.filter(o => o.status === column.id).length === 0 && (
+                                <div style={{ textAlign: 'center', padding: '2rem', color: '#9ca3af', fontSize: '0.9rem', border: '2px dashed #e5e7eb', borderRadius: '8px' }}>
+                                    Sin pedidos
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}

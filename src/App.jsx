@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingBasket, Apple, Milk, SprayCan, ChevronRight, Trash2, Plus, Minus, Dog, Pill, Croissant, Baby, Package, Clock, CheckCircle, ArrowUpDown, Heart, Search, MapPin } from 'lucide-react';
+import { ShoppingBasket, Apple, Milk, SprayCan, ChevronRight, Trash2, Plus, Minus, Dog, Pill, Croissant, Baby, Package, Clock, CheckCircle, ArrowUpDown, Heart, Search, MapPin, Share2 } from 'lucide-react';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { ProductCard } from './components/ProductCard';
@@ -9,14 +9,56 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { OffersCarousel } from './components/OffersCarousel';
 import { LoginModal } from './components/LoginModal';
 import { Toast } from './components/Toast';
-import { products, categories } from './data/products';
+import { Flyer } from './components/Flyer';
+import { StoreMap } from './components/StoreMap';
+import { FlashSale } from './components/FlashSale';
+import { ComboSection } from './components/ComboSection';
+import { ScratchGame } from './components/ScratchGame';
+import { AdminLayout } from './components/admin/AdminLayout';
+import { AdminProducts } from './components/admin/AdminProducts';
+import { AdminOrders } from './components/admin/AdminOrders';
+import { AdminCustomers } from './components/admin/AdminCustomers';
+import { AdminPromotions } from './components/admin/AdminPromotions';
+import { AdminContent } from './components/admin/AdminContent';
+import { AdminSettings } from './components/admin/AdminSettings';
+import { AdminPanel } from './components/AdminPanel';
+import { ProductSkeleton } from './components/ProductSkeleton';
+import { ProductService } from './services/products';
 
 const iconMap = {
-  Apple, Milk, SprayCan, Dog, Pill, Croissant, Baby
+  ShoppingBasket, Apple, Milk, SprayCan, Dog, Pill, Croissant, Baby
 };
 
 function App() {
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadData = async () => {
+    try {
+      const fetchedProducts = await ProductService.getAllProducts();
+      const fetchedCategories = await ProductService.getAllCategories();
+      setProducts(fetchedProducts);
+      setCategories(fetchedCategories);
+      setIsDataLoaded(true);
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+
+
+
+
   const [activeTab, setActiveTab] = useState('home');
+  const [adminView, setAdminView] = useState('dashboard');
   const [cart, setCart] = useState(() => {
     const saved = localStorage.getItem('cart');
     return saved ? JSON.parse(saved) : [];
@@ -28,6 +70,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('user');
     return savedUser ? JSON.parse(savedUser) : null;
@@ -42,6 +85,52 @@ function App() {
   const [sortOrder, setSortOrder] = useState(null); // null, 'asc', 'desc'
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [toast, setToast] = useState(null); // { message, type }
+  const [cartAnimating, setCartAnimating] = useState(false);
+  const [pointsToUse, setPointsToUse] = useState(0);
+  const [showMap, setShowMap] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(20); // Initial load count
+  const [showScratchGame, setShowScratchGame] = useState(false);
+
+  // Reload data when switching to home tab to ensure freshness
+  useEffect(() => {
+    if (activeTab === 'home') {
+      loadData();
+    }
+  }, [activeTab]);
+
+  // Check for daily scratch game
+  useEffect(() => {
+    const lastPlayed = localStorage.getItem('lastPlayedDate');
+    const today = new Date().toDateString();
+
+    if (lastPlayed !== today) {
+      // Small delay to show it after loading
+      setTimeout(() => setShowScratchGame(true), 2000);
+    }
+  }, []);
+
+  const handleScratchWin = (prize) => {
+    const today = new Date().toDateString();
+    localStorage.setItem('lastPlayedDate', today);
+
+    if (user) {
+      const updatedUser = { ...user, wallet: (user.wallet || 0) + prize };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    } else {
+      // If no user logged in, maybe save to temp storage or prompt login?
+      // For now, let's just show toast and maybe prompt login later.
+      // Or better, just don't save points but show the win for fun/engagement.
+    }
+
+    // Close game after a moment
+    setTimeout(() => setShowScratchGame(false), 2500);
+  };
+  // Simulate initial loading - REMOVED as we now have real async loading
+  // useEffect(() => {
+  //   const timer = setTimeout(() => setIsLoading(false), 1500);
+  //   return () => clearTimeout(timer);
+  // }, []);
 
   // Persistence Effects
   useEffect(() => {
@@ -56,13 +145,39 @@ function App() {
     localStorage.setItem('orders', JSON.stringify(orders));
   }, [orders]);
 
+  // Update cart items when products change (e.g. price updates from Admin)
+  useEffect(() => {
+    if (products.length > 0 && cart.length > 0) {
+      setCart(prevCart => {
+        const updatedCart = prevCart.map(cartItem => {
+          const latestProduct = products.find(p => p.id === cartItem.id);
+          if (latestProduct) {
+            // Update price and other details, keep quantity
+            return {
+              ...cartItem,
+              price: latestProduct.price,
+              name: latestProduct.name, // In case name changed
+              image: latestProduct.image,
+              originalPrice: latestProduct.originalPrice
+            };
+          }
+          return cartItem;
+        });
+
+        // Check if any changes actually happened to avoid unnecessary re-renders/saves
+        const hasChanges = JSON.stringify(updatedCart) !== JSON.stringify(prevCart);
+        return hasChanges ? updatedCart : prevCart;
+      });
+    }
+  }, [products]);
+
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
   };
 
   const handleLogin = (name) => {
     if (name) {
-      const userData = { name, email: 'cliente@ejemplo.com' };
+      const userData = { name, email: 'cliente@ejemplo.com', wallet: 0 };
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
       showToast(`¡Bienvenido, ${name}!`);
@@ -93,6 +208,10 @@ function App() {
       setTimeout(() => setFlyingItem(null), 800);
     }
 
+    // Trigger cart shake animation
+    setCartAnimating(true);
+    setTimeout(() => setCartAnimating(false), 400);
+
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
@@ -104,6 +223,28 @@ function App() {
       showToast(`${product.name} agregado al carrito`);
       return [...prev, { ...product, quantity: 1 }];
     });
+  };
+
+  const handleAddCombo = (combo) => {
+    setCart(prev => {
+      let newCart = [...prev];
+      combo.items.forEach(item => {
+        const existingIndex = newCart.findIndex(i => i.id === item.id);
+        if (existingIndex >= 0) {
+          newCart[existingIndex] = {
+            ...newCart[existingIndex],
+            quantity: newCart[existingIndex].quantity + item.quantity
+          };
+        } else {
+          // We need an image for the cart, use combo image as fallback if not in item
+          newCart.push({ ...item, image: combo.image });
+        }
+      });
+      return newCart;
+    });
+    setCartAnimating(true);
+    setTimeout(() => setCartAnimating(false), 400);
+    showToast(`¡Combo ${combo.name} agregado!`);
   };
 
   const removeFromCart = (productId) => {
@@ -137,9 +278,9 @@ function App() {
     // Mock scan logic
     const product = products.find(p => p.id === parseInt(code) || p.name.toLowerCase().includes('leche')); // Mock match
     if (product) {
-      addToCart(product);
+      setSelectedProduct(product);
       setIsScanning(false);
-      showToast('¡Producto escaneado y agregado!');
+      showToast('¡Producto encontrado!');
     } else {
       showToast('Producto no encontrado', 'error');
       setIsScanning(false);
@@ -148,12 +289,14 @@ function App() {
 
   const handleCategoryClick = (categoryName) => {
     setSelectedCategory(categoryName);
+    setSelectedSubcategory(null); // Reset subcategory when category changes
     setSearchQuery('');
     setActiveTab('home');
   };
 
   const clearFilters = () => {
     setSelectedCategory(null);
+    setSelectedSubcategory(null);
     setSearchQuery('');
   };
 
@@ -167,9 +310,48 @@ function App() {
       id: Math.floor(Math.random() * 1000000),
       date: new Date().toLocaleDateString(),
       items: [...cart],
-      total: cart.reduce((acc, item) => acc + (item.price * item.quantity), 0),
+      total: Math.max(0, cart.reduce((acc, item) => acc + (item.price * item.quantity), 0) - (pointsToUse * 0.1)), // 1 point = $0.10
+      pointsUsed: pointsToUse,
       status: 'En camino'
     };
+
+
+    // Calculate points earned
+    // Calculate points earned
+    const pointsEarned = cart.reduce((acc, item) => acc + ((item.bonusPoints || 0) * item.quantity), 0);
+
+    setUser(currentUser => {
+      let updatedUser = { ...currentUser };
+      let userUpdated = false;
+
+      // Handle Coupon Consumption
+      if (details.coupon) {
+        // Filter by ID if available to remove specific coupon instance, otherwise by code
+        const updatedCoupons = (currentUser.coupons || []).filter(c => {
+          if (details.coupon.id && c.id) return c.id !== details.coupon.id;
+          return c.code !== details.coupon.code;
+        });
+        updatedUser = { ...updatedUser, coupons: updatedCoupons };
+        userUpdated = true;
+      }
+
+      // Handle Points Earned
+      if (pointsEarned > 0) {
+        updatedUser = { ...updatedUser, wallet: (updatedUser.wallet || 0) + pointsEarned };
+        userUpdated = true;
+        // Move toast outside or use effect, but for now it's fine here as side effect of event
+      }
+
+      if (userUpdated) {
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        return updatedUser;
+      }
+      return currentUser;
+    });
+
+    if (pointsEarned > 0) {
+      showToast(`¡Ganaste ${pointsEarned} puntos!`);
+    }
 
     setOrders(prev => [newOrder, ...prev]);
     setCart([]);
@@ -183,6 +365,15 @@ function App() {
     const message = `¡Hola! Quiero realizar un pedido en Abarrotes Alex.\n\n*Pedido #${newOrder.id}*\n\n*Productos:*\n${itemsList}\n\n*Total: $${newOrder.total.toFixed(2)}*\n\n*Dirección de Entrega:*\n${details.address}\n\n*Método de Pago:*\n${details.paymentMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}`;
 
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const handleShareCart = () => {
+    if (cart.length === 0) return;
+
+    const itemsList = cart.map(item => `- ${item.name} x${item.quantity}`).join('\n');
+    const message = `¡Hola! Necesito comprar esto:\n\n${itemsList}\n\nTotal estimado: $${cartTotal.toFixed(2)}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
 
@@ -206,11 +397,17 @@ function App() {
     showToast('¡Productos agregados al carrito!');
   };
 
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [selectedCategory, selectedSubcategory, searchQuery]);
+
   const filteredProducts = products
     .filter(product => {
       const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = selectedCategory ? product.category === selectedCategory : true;
-      return matchesSearch && matchesCategory;
+      const matchesSubcategory = selectedSubcategory ? product.subcategory === selectedSubcategory : true;
+      return matchesSearch && matchesCategory && matchesSubcategory;
     })
     .sort((a, b) => {
       if (sortOrder === 'asc') return a.price - b.price;
@@ -218,19 +415,66 @@ function App() {
       return 0;
     });
 
+  const visibleProducts = filteredProducts.slice(0, visibleCount);
+
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const discountAmount = pointsToUse * 0.1; // 1 point = $0.10
+  const finalTotal = Math.max(0, cartTotal - discountAmount);
+
+  const totalSavings = cart.reduce((acc, item) => {
+    if (item.originalPrice && item.originalPrice > item.price) {
+      return acc + ((item.originalPrice - item.price) * item.quantity);
+    }
+    return acc;
+  }, 0);
+
+  // Best Sellers (Mock - just take first 4 products)
+  const bestSellers = products.slice(0, 4);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     if (tab === 'home') {
       setSelectedCategory(null);
+      setSelectedSubcategory(null);
       setSearchQuery('');
     }
   };
 
+  if (!isDataLoaded) {
+    return <div style={{ padding: '2rem', textAlign: 'center' }}>Cargando datos...</div>;
+  }
+
   if (!user) {
     return <LoginModal onLogin={handleLogin} />;
+  }
+
+  if (activeTab === 'admin') {
+    return (
+      <AdminLayout
+        activeView={adminView}
+        onViewChange={setAdminView}
+        onLogout={() => setActiveTab('home')}
+      >
+        {adminView === 'dashboard' && <AdminPanel />}
+        {adminView === 'products' && <AdminProducts />}
+        {adminView === 'orders' && <AdminOrders />}
+        {adminView === 'customers' && <AdminCustomers />}
+        {adminView === 'promos' && <AdminPromotions />}
+        {adminView === 'content' && <AdminContent />}
+        {adminView === 'settings' && <AdminSettings />}
+
+        {/* Placeholder for other views */}
+        {adminView !== 'dashboard' && adminView !== 'products' && adminView !== 'orders' &&
+          adminView !== 'customers' && adminView !== 'promos' && adminView !== 'content' &&
+          adminView !== 'settings' && (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
+              <h2>Sección en construcción: {adminView}</h2>
+              <p>Pronto podrás gestionar {adminView} desde aquí.</p>
+            </div>
+          )}
+      </AdminLayout>
+    );
   }
 
   return (
@@ -248,70 +492,119 @@ function App() {
         {activeTab === 'home' && (
           <>
             {/* Filter Status - Simplified */}
-            {(selectedCategory || searchQuery) && (
-              <div style={{
-                marginBottom: '1rem',
-                padding: '0.5rem 1rem',
-                borderRadius: '8px',
-                backgroundColor: '#e8f5e9',
-                color: 'var(--color-primary-dark)',
-                fontSize: '0.9rem',
-                fontWeight: '500',
-                textAlign: 'center'
-              }}>
-                {selectedCategory ? `Categoría: ${selectedCategory}` : 'Resultados de búsqueda'}
-              </div>
-            )}
 
-            {/* Departments Scroller - Only show if no category selected */}
+
+            {/* Categories Grid */}
             {!selectedCategory && !searchQuery && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <div className="flex-between" style={{ marginBottom: '0.5rem' }}>
-                  <h3>Departamentos</h3>
-                </div>
-                <div className="hide-scrollbar" style={{
-                  display: 'flex',
+              <div style={{ marginBottom: '2rem' }}>
+                <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Departamentos</h3>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
                   gap: '1rem',
-                  overflowX: 'auto',
-                  paddingBottom: '0.5rem'
+                  textAlign: 'center'
                 }}>
-                  {categories.map(category => {
-                    const Icon = iconMap[category.icon] || ShoppingBasket;
+                  {categories.map(cat => {
+                    // Lucide icons map
+                    const Icon = iconMap[cat.icon] || ShoppingBasket;
+
                     return (
-                      <button
-                        key={category.id}
-                        onClick={() => handleCategoryClick(category.name)}
-                        style={{
-                          minWidth: '80px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: '0.5rem'
-                        }}
-                      >
+                      <div key={cat.id} onClick={() => handleCategoryClick(cat.name)} style={{ cursor: 'pointer' }}>
                         <div style={{
-                          width: '60px',
-                          height: '60px',
-                          backgroundColor: category.color || '#fff3e0',
-                          borderRadius: '12px',
+                          backgroundColor: cat.color,
+                          width: '100%',
+                          aspectRatio: '1',
+                          borderRadius: '16px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: '#333'
+                          marginBottom: '0.5rem',
+                          boxShadow: 'var(--shadow-sm)'
                         }}>
-                          <Icon size={28} />
+                          <Icon size={24} color="var(--color-primary-dark)" />
                         </div>
-                        <span style={{ fontSize: '0.8rem', fontWeight: '500' }}>{category.name}</span>
-                      </button>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '500', color: '#555' }}>{cat.name}</span>
+                      </div>
                     );
                   })}
                 </div>
               </div>
             )}
 
+            {/* Subcategories Pills */}
+            {selectedCategory && (
+              <div style={{ marginBottom: '1.5rem', overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '0.5rem' }} className="no-scrollbar">
+                <button
+                  onClick={() => setSelectedSubcategory(null)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '20px',
+                    border: 'none',
+                    backgroundColor: !selectedSubcategory ? 'var(--color-primary)' : '#f0f0f0',
+                    color: !selectedSubcategory ? 'white' : '#666',
+                    marginRight: '0.5rem',
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Todo
+                </button>
+                {categories.find(c => c.name === selectedCategory)?.subcategories?.map(sub => (
+                  <button
+                    key={sub}
+                    onClick={() => setSelectedSubcategory(sub)}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      borderRadius: '20px',
+                      border: 'none',
+                      backgroundColor: selectedSubcategory === sub ? 'var(--color-primary)' : '#f0f0f0',
+                      color: selectedSubcategory === sub ? 'white' : '#666',
+                      marginRight: '0.5rem',
+                      fontSize: '0.9rem',
+                      fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Offers Banner - Only show on main home view */}
             {!selectedCategory && !searchQuery && (
-              <OffersCarousel />
+              <>
+                <OffersCarousel />
+
+                <FlashSale onAdd={addToCart} />
+
+                <ComboSection onAddCombo={handleAddCombo} />
+
+                <div style={{ marginTop: '2rem' }}>
+                  <Flyer />
+                </div>
+
+                {/* Best Sellers Section */}
+                <div style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
+                  <div className="flex-between" style={{ marginBottom: '0.5rem' }}>
+                    <h3>Más Vendidos 🔥</h3>
+                  </div>
+                  <div className="best-sellers-scroll">
+                    {bestSellers.map(product => (
+                      <div key={product.id} style={{ width: '160px' }}>
+                        <ProductCard
+                          product={product}
+                          onAdd={addToCart}
+                          isFavorite={favorites.some(fav => fav.id === product.id)}
+                          onToggleFavorite={() => toggleFavorite(product)}
+                          onClick={() => setSelectedProduct(product)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
 
             {/* Product Grid */}
@@ -356,18 +649,48 @@ function App() {
                 </button>
               </div>
             ) : (
-              <div className="grid-2">
-                {filteredProducts.map(product => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onAdd={addToCart}
-                    isFavorite={favorites.some(fav => fav.id === product.id)}
-                    onToggleFavorite={() => toggleFavorite(product)}
-                    onClick={() => setSelectedProduct(product)}
-                  />
-                ))}
-              </div>
+              <>
+                {/* Product Grid */}
+                <div className="grid-2" style={{ marginBottom: '2rem' }}>
+                  {isLoading ? (
+                    Array.from({ length: 6 }).map((_, idx) => (
+                      <ProductSkeleton key={idx} />
+                    ))
+                  ) : (
+                    visibleProducts.map(product => (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        onAdd={addToCart}
+                        isFavorite={favorites.some(fav => fav.id === product.id)}
+                        onToggleFavorite={() => toggleFavorite(product)}
+                        onClick={() => setSelectedProduct(product)}
+                      />
+                    ))
+                  )}
+                </div>
+
+                {/* Load More Button */}
+                {visibleCount < filteredProducts.length && (
+                  <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                    <button
+                      onClick={() => setVisibleCount(prev => prev + 20)}
+                      style={{
+                        padding: '0.75rem 2rem',
+                        backgroundColor: 'white',
+                        border: '1px solid #ddd',
+                        borderRadius: '20px',
+                        color: '#666',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        boxShadow: 'var(--shadow-sm)'
+                      }}
+                    >
+                      Ver más productos ({filteredProducts.length - visibleCount} restantes)
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -455,9 +778,20 @@ function App() {
                             <Trash2 size={18} />
                           </button>
                         </div>
-                        <p className="text-primary" style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                          ${item.price.toFixed(2)}
-                        </p>
+                        {item.originalPrice && item.originalPrice > item.price ? (
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#999', textDecoration: 'line-through', marginRight: '8px' }}>
+                              ${item.originalPrice.toFixed(2)}
+                            </span>
+                            <span className="text-primary" style={{ fontWeight: 'bold', color: '#d32f2f' }}>
+                              ${item.price.toFixed(2)}
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-primary" style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                            ${item.price.toFixed(2)}
+                          </p>
+                        )}
 
                         <div style={{
                           display: 'inline-flex',
@@ -519,13 +853,43 @@ function App() {
                     <span style={{ color: '#666' }}>Subtotal</span>
                     <span>${cartTotal.toFixed(2)}</span>
                   </div>
+                  {totalSavings > 0 && (
+                    <div className="flex-between" style={{ marginBottom: '0.5rem', color: 'var(--color-accent)', fontWeight: 'bold' }}>
+                      <span>Ahorro Total</span>
+                      <span>-${totalSavings.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex-between" style={{ marginBottom: '1rem' }}>
                     <span style={{ color: '#666' }}>Envío</span>
                     <span className="text-primary" style={{ fontWeight: 'bold' }}>Por confirmar</span>
                   </div>
+
+                  {/* Points Redemption */}
+                  {user.wallet > 0 && (
+                    <div style={{ marginTop: '1rem', backgroundColor: 'white', padding: '1rem', borderRadius: 'var(--radius)' }}>
+                      <h4 style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Usar Puntos (Saldo: {user.wallet})</h4>
+                      <div className="flex-between" style={{ gap: '0.5rem' }}>
+                        <input
+                          type="range"
+                          min="0"
+                          max={Math.min(user.wallet, cartTotal * 10)} // Max usage limited by total
+                          value={pointsToUse}
+                          onChange={(e) => setPointsToUse(parseInt(e.target.value))}
+                          style={{ flex: 1 }}
+                        />
+                        <span style={{ fontWeight: 'bold', minWidth: '60px', textAlign: 'right' }}>
+                          -${(pointsToUse * 0.1).toFixed(2)}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.25rem' }}>
+                        Usando {pointsToUse} puntos
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex-between" style={{ borderTop: '1px solid #eee', paddingTop: '1rem', marginBottom: '1rem' }}>
                     <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>Total</span>
-                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>${cartTotal.toFixed(2)}</span>
+                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>${finalTotal.toFixed(2)}</span>
                   </div>
 
                   <button
@@ -558,7 +922,195 @@ function App() {
             <div style={{ marginBottom: '2rem' }}>
               <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Mis Datos 👤</h3>
 
+              {/* Wallet & Loyalty Section */}
+              <div style={{
+                backgroundColor: 'var(--color-primary)',
+                color: 'white',
+                padding: '1.5rem',
+                borderRadius: '12px',
+                marginBottom: '1.5rem',
+                position: 'relative',
+                overflow: 'hidden',
+                boxShadow: 'var(--shadow-md)'
+              }}>
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                  <div style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '0.5rem' }}>Monedero Electrónico</div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '0.5rem' }}>
+                    {user.wallet || 0} pts
+                  </div>
+                  <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+                    Equivale a ${(user.wallet * 0.10).toFixed(2)} MXN
+                  </div>
+                </div>
+
+                {/* Decorative circles */}
+                <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '100px', height: '100px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+                <div style={{ position: 'absolute', bottom: '-30px', left: '-10px', width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+              </div>
+
+              {/* Loyalty Level Progress */}
+              {(() => {
+                const points = user.wallet || 0;
+                let level = 'Bronce';
+                let nextLevel = 'Plata';
+                let maxPoints = 200;
+                let color = '#cd7f32'; // Bronze
+
+                if (points >= 500) {
+                  level = 'Oro';
+                  nextLevel = 'Max';
+                  maxPoints = 1000; // Cap visual
+                  color = '#ffd700'; // Gold
+                } else if (points >= 200) {
+                  level = 'Plata';
+                  nextLevel = 'Oro';
+                  maxPoints = 500;
+                  color = '#c0c0c0'; // Silver
+                }
+
+                const progress = Math.min(100, (points / maxPoints) * 100);
+
+                return (
+                  <div style={{ marginBottom: '2rem' }}>
+                    <div className="flex-between" style={{ marginBottom: '0.5rem' }}>
+                      <span style={{ fontWeight: 'bold', color: color, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '1.2rem' }}>🏅</span> Nivel {level}
+                      </span>
+                      <span style={{ fontSize: '0.8rem', color: '#666' }}>
+                        {nextLevel !== 'Max' ? `${maxPoints - points} pts para ${nextLevel}` : '¡Nivel Máximo!'}
+                      </span>
+                    </div>
+                    <div style={{
+                      width: '100%',
+                      height: '10px',
+                      backgroundColor: '#f0f0f0',
+                      borderRadius: '5px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${progress}%`,
+                        height: '100%',
+                        backgroundColor: color,
+                        transition: 'width 0.5s ease'
+                      }} />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Rewards Center */}
+              <div style={{ marginBottom: '2rem' }}>
+                <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Centro de Recompensas 🎁</h3>
+
+                {/* Coupons Exchange */}
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <h4 style={{ fontSize: '0.9rem', marginBottom: '0.75rem', color: '#666' }}>Canjea tus puntos por cupones</h4>
+                  <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+                    {[
+                      { points: 500, discount: 10, code: 'DESC10' },
+                      { points: 1000, discount: 25, code: 'DESC25' },
+                      { points: 2000, discount: 50, code: 'DESC50' }
+                    ].map((coupon, idx) => (
+                      <div key={idx} style={{
+                        minWidth: '200px',
+                        backgroundColor: 'white',
+                        padding: '1rem',
+                        borderRadius: '12px',
+                        border: '1px dashed var(--color-primary)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--color-primary)', marginBottom: '0.25rem' }}>
+                          ${coupon.discount} MXN
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.75rem' }}>
+                          por {coupon.points} puntos
+                        </div>
+                        <button
+                          onClick={() => {
+                            if ((user.wallet || 0) >= coupon.points) {
+                              const updatedUser = {
+                                ...user,
+                                wallet: user.wallet - coupon.points,
+                                coupons: [...(user.coupons || []), { ...coupon, id: Date.now() }]
+                              };
+                              setUser(updatedUser);
+                              localStorage.setItem('user', JSON.stringify(updatedUser));
+                              showToast(`¡Cupón de $${coupon.discount} canjeado!`);
+                            } else {
+                              showToast('Puntos insuficientes', 'error');
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '0.5rem',
+                            backgroundColor: (user.wallet || 0) >= coupon.points ? 'var(--color-primary)' : '#ccc',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: (user.wallet || 0) >= coupon.points ? 'pointer' : 'not-allowed',
+                            fontSize: '0.9rem',
+                            fontWeight: '600'
+                          }}
+                        >
+                          Canjear
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* My Coupons */}
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', marginBottom: '0.75rem', color: '#666' }}>Mis Cupones Activos</h4>
+                  {(!user.coupons || user.coupons.length === 0) ? (
+                    <p style={{ fontSize: '0.9rem', color: '#999', fontStyle: 'italic' }}>No tienes cupones activos.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {user.coupons.map((coupon, idx) => (
+                        <div key={idx} className="flex-between" style={{
+                          backgroundColor: '#fff3e0',
+                          padding: '0.75rem 1rem',
+                          borderRadius: '8px',
+                          borderLeft: '4px solid #ff9800'
+                        }}>
+                          <div>
+                            <div style={{ fontWeight: 'bold', color: '#e65100' }}>Cupón ${coupon.discount} MXN</div>
+                            <div style={{ fontSize: '0.8rem', color: '#666' }}>Código: {coupon.code}</div>
+                          </div>
+                          <span style={{ fontSize: '1.5rem' }}>🎟️</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', marginBottom: '1rem' }}>
+                <button
+                  onClick={() => setShowMap(true)}
+                  style={{
+                    width: '100%',
+                    padding: '1rem',
+                    backgroundColor: '#e3f2fd',
+                    color: 'var(--color-primary)',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    marginBottom: '1rem'
+                  }}
+                >
+                  <MapPin size={20} />
+                  Ver Sucursales y Horarios
+                </button>
+
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ display: 'block', fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>Nombre</label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -762,91 +1314,98 @@ function App() {
                 </div>
               )}
             </div>
-
-            <button
-              onClick={handleLogout}
-              style={{
-                width: '100%',
-                padding: '1rem',
-                backgroundColor: '#ffebee',
-                color: '#d32f2f',
-                border: 'none',
-                borderRadius: '12px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                marginTop: '2rem'
-              }}
-            >
-              Cerrar Sesión
-            </button>
           </div>
+        )}
+        {activeTab === 'admin' && (
+          <AdminPanel />
         )}
       </main>
 
-      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} cartCount={cartCount} />
+      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} cartCount={cartCount} isAnimating={cartAnimating} />
 
       {/* Product Details Modal */}
-      {selectedProduct && (
-        <ProductDetails
-          product={selectedProduct}
-          onClose={() => setSelectedProduct(null)}
-          onAdd={addToCart}
-          isFavorite={favorites.some(fav => fav.id === selectedProduct.id)}
-          onToggleFavorite={() => toggleFavorite(selectedProduct)}
-          onProductSelect={setSelectedProduct}
-        />
-      )}
+      {
+        selectedProduct && (
+          <ProductDetails
+            product={selectedProduct}
+            products={products}
+            onClose={() => setSelectedProduct(null)}
+            onAdd={addToCart}
+            isFavorite={favorites.some(fav => fav.id === selectedProduct.id)}
+            onToggleFavorite={() => toggleFavorite(selectedProduct)}
+            onProductSelect={setSelectedProduct}
+          />
+        )
+      }
 
       {/* Barcode Scanner */}
-      {isScanning && (
-        <BarcodeScanner
-          onClose={() => setIsScanning(false)}
-          onScan={handleScan}
-        />
-      )}
+      {
+        isScanning && (
+          <BarcodeScanner
+            onClose={() => setIsScanning(false)}
+            onScan={handleScan}
+          />
+        )
+      }
 
       {/* Checkout Modal */}
-      {showCheckout && (
-        <CheckoutModal
-          onClose={() => setShowCheckout(false)}
-          onConfirm={handleConfirmOrder}
-          total={cartTotal}
-        />
-      )}
+      {
+        showCheckout && (
+          <CheckoutModal
+            onClose={() => setShowCheckout(false)}
+            onConfirm={handleConfirmOrder}
+            total={cartTotal}
+          />
+        )
+      }
 
       {/* Fly to Cart Animation */}
-      {flyingItem && (
-        <img
-          src={flyingItem.image}
-          alt=""
-          style={{
-            position: 'fixed',
-            left: flyingItem.x,
-            top: flyingItem.y,
-            width: '50px',
-            height: '50px',
-            objectFit: 'contain',
-            borderRadius: '50%',
-            pointerEvents: 'none',
-            zIndex: 9999,
-            animation: 'flyToCart 0.8s cubic-bezier(0.2, 1, 0.3, 1) forwards'
-          }}
-        />
-      )}
+      {
+        flyingItem && (
+          <img
+            src={flyingItem.image}
+            alt=""
+            style={{
+              position: 'fixed',
+              left: flyingItem.x,
+              top: flyingItem.y,
+              width: '50px',
+              height: '50px',
+              objectFit: 'contain',
+              borderRadius: '50%',
+              pointerEvents: 'none',
+              zIndex: 9999,
+              animation: 'flyToCart 0.8s cubic-bezier(0.2, 1, 0.3, 1) forwards'
+            }}
+          />
+        )
+      }
 
       {/* Toast Notification */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
+      {
+        toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )
+      }
+
+      {/* Store Map Modal */}
+      {
+        showMap && (
+          <StoreMap onClose={() => setShowMap(false)} />
+        )
+      }
+      {/* Daily Scratch Game */}
+      {showScratchGame && (
+        <ScratchGame
+          onWin={handleScratchWin}
+          onClose={() => setShowScratchGame(false)}
         />
       )}
-    </div>
+    </div >
   );
 }
 

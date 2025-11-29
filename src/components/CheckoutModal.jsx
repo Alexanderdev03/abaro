@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CreditCard, Banknote, MapPin } from 'lucide-react';
+import { X, CreditCard, Banknote, MapPin, Clock } from 'lucide-react';
 
 export function CheckoutModal({ onClose, onConfirm, total }) {
     const [savedAddresses, setSavedAddresses] = useState(() => {
@@ -10,7 +10,13 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
     const [showAddressForm, setShowAddressForm] = useState(savedAddresses.length === 0);
     const [newAddress, setNewAddress] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('cash');
+    const [deliverySchedule, setDeliverySchedule] = useState('asap'); // 'asap', 'morning', 'afternoon'
     const [isProcessing, setIsProcessing] = useState(false);
+
+    // Coupon State
+    const [couponCode, setCouponCode] = useState('');
+    const [appliedCoupon, setAppliedCoupon] = useState(null);
+    const [couponError, setCouponError] = useState('');
 
     const handleSaveAddress = () => {
         if (!newAddress.trim()) return;
@@ -22,6 +28,21 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
         setSelectedAddressIndex(updated.length - 1);
     };
 
+    const handleApplyCoupon = () => {
+        setCouponError('');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const userCoupons = user.coupons || [];
+
+        const validCoupon = userCoupons.find(c => c.code === couponCode);
+
+        if (validCoupon) {
+            setAppliedCoupon(validCoupon);
+            setCouponCode('');
+        } else {
+            setCouponError('Cupón inválido o no encontrado');
+        }
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
 
@@ -29,7 +50,6 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
         if (showAddressForm) {
             if (!newAddress.trim()) return;
             finalAddress = newAddress;
-            // Auto-save if it's the first one or user explicitly added it (handled by save button usually, but here we handle submit)
             if (savedAddresses.length === 0) {
                 const updated = [newAddress];
                 setSavedAddresses(updated);
@@ -41,10 +61,22 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
 
         setIsProcessing(true);
         setTimeout(() => {
-            onConfirm({ address: finalAddress, paymentMethod });
+            setTimeout(() => {
+                onConfirm({
+                    address: finalAddress,
+                    paymentMethod,
+                    deliverySchedule,
+                    coupon: appliedCoupon // Pass the applied coupon
+                });
+                setIsProcessing(false);
+            }, 1500);
             setIsProcessing(false);
         }, 1500);
     };
+
+    // Calculate totals
+    const couponDiscount = appliedCoupon ? appliedCoupon.discount : 0;
+    const finalPayable = Math.max(0, total - couponDiscount);
 
     return (
         <div style={{
@@ -196,6 +228,38 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
                         )}
                     </div>
 
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>
+                            <Clock size={16} style={{ marginRight: '4px', verticalAlign: 'text-bottom' }} />
+                            Horario de Entrega
+                        </label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+                            {[
+                                { id: 'asap', label: 'Lo antes posible' },
+                                { id: 'morning', label: 'Mañana (10-12)' },
+                                { id: 'afternoon', label: 'Tarde (14-16)' }
+                            ].map(option => (
+                                <button
+                                    key={option.id}
+                                    type="button"
+                                    onClick={() => setDeliverySchedule(option.id)}
+                                    style={{
+                                        padding: '0.75rem 0.25rem',
+                                        borderRadius: '8px',
+                                        border: `1px solid ${deliverySchedule === option.id ? 'var(--color-primary)' : '#eee'}`,
+                                        backgroundColor: deliverySchedule === option.id ? '#e8f5e9' : 'white',
+                                        color: deliverySchedule === option.id ? 'var(--color-primary)' : '#666',
+                                        cursor: 'pointer',
+                                        fontSize: '0.8rem',
+                                        fontWeight: '500'
+                                    }}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     <div style={{ marginBottom: '2rem' }}>
                         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>
                             Método de Pago
@@ -241,18 +305,119 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
                         </div>
                     </div>
 
+                    {/* Coupon Section */}
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Cupón de Descuento</label>
+
+                        {/* Available Coupons Chips */}
+                        {(() => {
+                            const user = JSON.parse(localStorage.getItem('user') || '{}');
+                            const userCoupons = user.coupons || [];
+                            if (userCoupons.length > 0) {
+                                return (
+                                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                                        {userCoupons.map((coupon, idx) => (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                onClick={() => {
+                                                    setCouponCode(coupon.code);
+                                                    setAppliedCoupon(coupon);
+                                                    setCouponError('');
+                                                }}
+                                                style={{
+                                                    padding: '0.25rem 0.75rem',
+                                                    backgroundColor: '#fff3e0',
+                                                    border: '1px solid #ff9800',
+                                                    borderRadius: '16px',
+                                                    color: '#e65100',
+                                                    fontSize: '0.75rem',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                <span>🏷️</span>
+                                                <span>{coupon.code} (${coupon.discount})</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                );
+                            }
+                            return (
+                                <div style={{ marginBottom: '0.75rem', fontSize: '0.85rem', color: '#666', fontStyle: 'italic' }}>
+                                    No tienes cupones activos. Ve a tu Perfil para canjear puntos.
+                                </div>
+                            );
+                        })()}
+
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <input
+                                type="text"
+                                value={couponCode}
+                                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                                placeholder="Ingresa tu código"
+                                style={{
+                                    flex: 1,
+                                    padding: '0.75rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #ddd',
+                                    textTransform: 'uppercase'
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={handleApplyCoupon}
+                                style={{
+                                    padding: '0.75rem 1rem',
+                                    backgroundColor: '#333',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontWeight: '600'
+                                }}
+                            >
+                                Aplicar
+                            </button>
+                        </div>
+                        {couponError && <p style={{ color: '#d32f2f', fontSize: '0.85rem', marginTop: '0.25rem' }}>{couponError}</p>}
+
+                        {appliedCoupon && (
+                            <div className="flex-between" style={{
+                                marginTop: '0.5rem',
+                                padding: '0.5rem',
+                                backgroundColor: '#e8f5e9',
+                                borderRadius: '8px',
+                                color: '#2e7d32',
+                                fontSize: '0.9rem'
+                            }}>
+                                <span>Cupón aplicado: {appliedCoupon.code}</span>
+                                <span style={{ fontWeight: 'bold' }}>-${appliedCoupon.discount.toFixed(2)}</span>
+                            </div>
+                        )}
+                    </div>
+
                     <div style={{
                         borderTop: '1px solid #eee',
                         paddingTop: '1rem',
-                        marginBottom: '1.5rem',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        fontWeight: 'bold',
-                        fontSize: '1.1rem'
+                        marginBottom: '1.5rem'
                     }}>
-                        <span>Total a Pagar:</span>
-                        <span style={{ color: 'var(--color-primary)' }}>${total.toFixed(2)}</span>
+                        <div className="flex-between" style={{ marginBottom: '0.5rem', color: '#666' }}>
+                            <span>Subtotal (con puntos aplicados)</span>
+                            <span>${total.toFixed(2)}</span>
+                        </div>
+                        {appliedCoupon && (
+                            <div className="flex-between" style={{ marginBottom: '0.5rem', color: '#2e7d32' }}>
+                                <span>Descuento Cupón</span>
+                                <span>-${appliedCoupon.discount.toFixed(2)}</span>
+                            </div>
+                        )}
+                        <div className="flex-between" style={{ fontSize: '1.2rem', fontWeight: 'bold', marginTop: '0.5rem' }}>
+                            <span>Total a Pagar</span>
+                            <span style={{ color: 'var(--color-primary)' }}>${finalPayable.toFixed(2)}</span>
+                        </div>
                     </div>
 
                     <button
