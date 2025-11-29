@@ -506,8 +506,23 @@ function App() {
 
   useEffect(() => {
     const handlePopState = (event) => {
-      // If we go back and the modal is open, close it
-      setSelectedProduct(null);
+      // Handle Modal Closing
+      if (selectedProduct) {
+        setSelectedProduct(null);
+        return; // Stop here if we just closed a modal
+      }
+
+      // Handle Tab Navigation
+      if (event.state && event.state.section) {
+        setActiveTab(event.state.section);
+      } else {
+        // If no state or no section, we assume we are back at Home
+        setActiveTab('home');
+        // Also clear filters if we go back to home base
+        setSelectedCategory(null);
+        setSelectedSubcategory(null);
+        setSearchQuery('');
+      }
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -515,7 +530,41 @@ function App() {
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, []);
+  }, [selectedProduct]); // Add selectedProduct dependency to ensure we have fresh state
+
+  function handleTabChange(tab) {
+    if (tab === 'home') {
+      if (activeTab !== 'home') {
+        // If we are not on home, try to go back in history to reach home
+        // This assumes the user navigated from Home -> Tab.
+        // If they went Home -> Tab A -> Tab B, going back once might go to Tab A.
+        // For simplicity and "Home Base" behavior, we might want to just reset.
+        // But the requirement says: "Si el usuario toca el botón de 'Inicio' manualmente, usa history.back()"
+
+        // We need to be careful. If we just push 'home', we build a stack.
+        // If we use back(), we might exit if the stack is empty (unlikely if we came from home).
+
+        // Let's check if we have state. If we have state.section, we are deep.
+        if (window.history.state && window.history.state.section) {
+          window.history.back();
+        } else {
+          // Fallback if we are somehow on a tab but without state (e.g. direct load)
+          setActiveTab('home');
+          // Clear URL hash
+          window.history.replaceState(null, '', ' ');
+        }
+      } else {
+        // Already on home, maybe clear filters
+        setSelectedCategory(null);
+        setSelectedSubcategory(null);
+        setSearchQuery('');
+      }
+    } else {
+      // Navigate to a new tab
+      setActiveTab(tab);
+      window.history.pushState({ section: tab }, '', `#${tab}`);
+    }
+  }
 
   if (!isDataLoaded) {
     return <div style={{ padding: '2rem', textAlign: 'center' }}>Cargando datos...</div>;
