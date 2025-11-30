@@ -50,7 +50,7 @@ export function ProductForm({ product, onClose, onSave, categories }) {
             points: formData.points ? parseInt(formData.points) : 0,
             isBulk: formData.isBulk,
             averageWeight: formData.averageWeight ? parseFloat(formData.averageWeight) : null,
-            bulkSuggestions: formData.bulkSuggestions
+            bulkSuggestions: formData.bulkSuggestions || null
         });
     };
 
@@ -81,8 +81,8 @@ export function ProductForm({ product, onClose, onSave, categories }) {
                     return { ...prev, image: url };
                 });
             } catch (error) {
-                alert(`Error al subir la imagen: ${error.message}`);
                 console.error("Error en handleImageUpload:", error);
+                alert(`Error al subir la imagen: ${error.message || "Error desconocido"}`);
             } finally {
                 setUploading(false);
             }

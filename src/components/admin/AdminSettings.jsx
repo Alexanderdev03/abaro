@@ -183,7 +183,22 @@ export function AdminSettings() {
                 title={modalConfig.title}
                 message={modalConfig.message}
                 isDanger={modalConfig.isDanger}
-            />
+            >
+                {modalConfig.requiresInput && (
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem', color: '#991b1b' }}>
+                            Escribe "BORRAR TODO" para confirmar:
+                        </label>
+                        <input
+                            type="text"
+                            value={confirmInput}
+                            onChange={(e) => setConfirmInput(e.target.value)}
+                            placeholder="BORRAR TODO"
+                            style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ef4444' }}
+                        />
+                    </div>
+                )}
+            </ConfirmationModal>
 
             {/* General Settings */}
             <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
@@ -437,19 +452,7 @@ export function AdminSettings() {
                         La tienda quedará completamente vacía. Esta acción no se puede deshacer.
                     </p>
 
-                    {modalConfig.requiresInput && modalConfig.isOpen && (
-                        <div style={{ marginBottom: '1rem' }}>
-                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem', color: '#991b1b' }}>
-                                Escribe "BORRAR TODO" para confirmar:
-                            </label>
-                            <input
-                                type="text"
-                                value={confirmInput}
-                                onChange={(e) => setConfirmInput(e.target.value)}
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #ef4444' }}
-                            />
-                        </div>
-                    )}
+
 
                     <button
                         onClick={handleResetDatabase}
