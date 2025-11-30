@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Tag, Zap, Trash2, Plus } from 'lucide-react';
+import { Save, Tag, Zap, Trash2, Plus, Edit } from 'lucide-react';
 import { ProductService } from '../../services/products';
 
 export function AdminPromotions() {
@@ -7,6 +7,7 @@ export function AdminPromotions() {
     const [flashSaleId, setFlashSaleId] = useState(localStorage.getItem('flashSaleId') || '');
     const [coupons, setCoupons] = useState(() => JSON.parse(localStorage.getItem('adminCoupons') || '[]'));
     const [newCoupon, setNewCoupon] = useState({ code: '', discount: '', points: '' });
+    const [editingCoupon, setEditingCoupon] = useState(null);
 
     useEffect(() => {
         ProductService.getAllProducts().then(setProducts);
@@ -23,21 +24,52 @@ export function AdminPromotions() {
         e.preventDefault();
         if (!newCoupon.code || !newCoupon.discount) return;
 
-        const updated = [...coupons, {
-            ...newCoupon,
-            id: Date.now(),
-            discount: Number(newCoupon.discount),
-            points: Number(newCoupon.points) || 0
-        }];
+        let updated;
+        if (editingCoupon) {
+            updated = coupons.map(c => c.id === editingCoupon.id ? {
+                ...editingCoupon,
+                code: newCoupon.code,
+                discount: Number(newCoupon.discount),
+                points: Number(newCoupon.points) || 0
+            } : c);
+            setEditingCoupon(null);
+        } else {
+            updated = [...coupons, {
+                ...newCoupon,
+                id: Date.now(),
+                discount: Number(newCoupon.discount),
+                points: Number(newCoupon.points) || 0
+            }];
+        }
+
         setCoupons(updated);
         localStorage.setItem('adminCoupons', JSON.stringify(updated));
         setNewCoupon({ code: '', discount: '', points: '' });
     };
 
+    const handleEditCoupon = (coupon) => {
+        setEditingCoupon(coupon);
+        setNewCoupon({
+            code: coupon.code,
+            discount: coupon.discount,
+            points: coupon.points || ''
+        });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingCoupon(null);
+        setNewCoupon({ code: '', discount: '', points: '' });
+    };
+
     const handleDeleteCoupon = (id) => {
-        const updated = coupons.filter(c => c.id !== id);
-        setCoupons(updated);
-        localStorage.setItem('adminCoupons', JSON.stringify(updated));
+        if (window.confirm('¿Estás seguro de eliminar este cupón?')) {
+            const updated = coupons.filter(c => c.id !== id);
+            setCoupons(updated);
+            localStorage.setItem('adminCoupons', JSON.stringify(updated));
+            if (editingCoupon && editingCoupon.id === id) {
+                handleCancelEdit();
+            }
+        }
     };
 
     return (
@@ -83,9 +115,9 @@ export function AdminPromotions() {
                     Cupones de Descuento
                 </h3>
 
-                {/* Add Coupon Form */}
-                <form onSubmit={handleAddCoupon} style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', alignItems: 'flex-end' }}>
-                    <div style={{ flex: 1 }}>
+                {/* Add/Edit Coupon Form */}
+                <form onSubmit={handleAddCoupon} style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '200px' }}>
                         <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', marginBottom: '0.5rem' }}>Código del Cupón</label>
                         <input
                             type="text"
@@ -115,17 +147,32 @@ export function AdminPromotions() {
                             style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #d1d5db' }}
                         />
                     </div>
-                    <button
-                        type="submit"
-                        style={{
-                            backgroundColor: '#10b981', color: 'white', border: 'none',
-                            padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: '0.5rem', height: '46px'
-                        }}
-                    >
-                        <Plus size={18} />
-                        Agregar
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {editingCoupon && (
+                            <button
+                                type="button"
+                                onClick={handleCancelEdit}
+                                style={{
+                                    backgroundColor: '#9ca3af', color: 'white', border: 'none',
+                                    padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer',
+                                    height: '46px'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                        )}
+                        <button
+                            type="submit"
+                            style={{
+                                backgroundColor: editingCoupon ? '#f59e0b' : '#10b981', color: 'white', border: 'none',
+                                padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: '0.5rem', height: '46px'
+                            }}
+                        >
+                            {editingCoupon ? <Save size={18} /> : <Plus size={18} />}
+                            {editingCoupon ? 'Actualizar' : 'Agregar'}
+                        </button>
+                    </div>
                 </form>
 
                 {/* Coupons List */}
@@ -142,23 +189,33 @@ export function AdminPromotions() {
                         <tbody>
                             {coupons.length === 0 ? (
                                 <tr>
-                                    <td colSpan="3" style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
+                                    <td colSpan="4" style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>
                                         No hay cupones activos
                                     </td>
                                 </tr>
                             ) : (
                                 coupons.map(coupon => (
-                                    <tr key={coupon.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                    <tr key={coupon.id} style={{ borderBottom: '1px solid #f3f4f6', backgroundColor: editingCoupon?.id === coupon.id ? '#fff7ed' : 'transparent' }}>
                                         <td style={{ padding: '1rem', fontWeight: '600', color: '#111827' }}>{coupon.code}</td>
                                         <td style={{ padding: '1rem', color: '#059669', fontWeight: 'bold' }}>${coupon.discount.toFixed(2)}</td>
                                         <td style={{ padding: '1rem', color: '#ea580c', fontWeight: 'bold' }}>{coupon.points || 0} pts</td>
                                         <td style={{ padding: '1rem', textAlign: 'right' }}>
-                                            <button
-                                                onClick={() => handleDeleteCoupon(coupon.id)}
-                                                style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                                <button
+                                                    onClick={() => handleEditCoupon(coupon)}
+                                                    style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}
+                                                    title="Editar"
+                                                >
+                                                    <Edit size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteCoupon(coupon.id)}
+                                                    style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
+                                                    title="Eliminar"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))

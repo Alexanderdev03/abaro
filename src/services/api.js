@@ -44,6 +44,7 @@ import { OrderService } from './orders';
  */
 
 import { StorageService } from './storage';
+import { UserService } from './users';
 
 // ... (existing typedefs)
 
@@ -58,7 +59,8 @@ export const api = {
         delete: ProductService.deleteProduct,
         addCategory: ProductService.addCategory,
         updateCategory: ProductService.updateCategory,
-        deleteCategory: ProductService.deleteCategory
+        deleteCategory: ProductService.deleteCategory,
+        deleteAllProducts: ProductService.deleteAllProducts
     },
     orders: {
         create: OrderService.createOrder,
@@ -83,5 +85,9 @@ export const api = {
         logout: async () => {
             return true;
         }
+    },
+    users: {
+        getAll: UserService.getAll,
+        getHistory: UserService.getHistory
     }
 };

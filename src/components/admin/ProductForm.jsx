@@ -12,7 +12,10 @@ export function ProductForm({ product, onClose, onSave, categories }) {
         image: '',
         description: '',
         stock: 'In Stock',
-        points: ''
+        stock: 'In Stock',
+        points: '',
+        isBulk: false,
+        averageWeight: ''
     });
     const [uploading, setUploading] = useState(false);
 
@@ -27,7 +30,11 @@ export function ProductForm({ product, onClose, onSave, categories }) {
                 image: product.image || '',
                 description: product.description || '',
                 stock: product.stock || 'In Stock',
-                points: product.points || ''
+                stock: product.stock || 'In Stock',
+                points: product.points || '',
+                isBulk: product.isBulk || false,
+                averageWeight: product.averageWeight || '',
+                bulkSuggestions: product.bulkSuggestions || ''
             });
         }
     }, [product]);
@@ -38,7 +45,12 @@ export function ProductForm({ product, onClose, onSave, categories }) {
             ...formData,
             price: parseFloat(formData.price),
             originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : null,
-            points: formData.points ? parseInt(formData.points) : 0
+            price: parseFloat(formData.price),
+            originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : null,
+            points: formData.points ? parseInt(formData.points) : 0,
+            isBulk: formData.isBulk,
+            averageWeight: formData.averageWeight ? parseFloat(formData.averageWeight) : null,
+            bulkSuggestions: formData.bulkSuggestions
         });
     };
 
@@ -134,6 +146,53 @@ export function ProductForm({ product, onClose, onSave, categories }) {
                             />
                         </div>
                     </div>
+
+                    <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <input
+                            type="checkbox"
+                            id="isBulk"
+                            checked={formData.isBulk}
+                            onChange={e => setFormData({ ...formData, isBulk: e.target.checked })}
+                            style={{ width: '18px', height: '18px' }}
+                        />
+                        <label htmlFor="isBulk" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                            Venta a Granel (Precio por Kg)
+                        </label>
+                    </div>
+
+                    {formData.isBulk && (
+                        <>
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                                    Peso Promedio por Pieza (Kg) <span style={{ fontWeight: 'normal', color: '#666' }}>(Opcional, para venta por pieza)</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.001"
+                                    value={formData.averageWeight}
+                                    onChange={e => setFormData({ ...formData, averageWeight: e.target.value })}
+                                    placeholder="Ej. 0.300"
+                                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                                />
+                            </div>
+
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                                    Sugerencias de Peso (Kg, separadas por coma)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.bulkSuggestions || ''}
+                                    onChange={e => setFormData({ ...formData, bulkSuggestions: e.target.value })}
+                                    placeholder="Ej. 0.100, 0.250, 0.500, 1.0"
+                                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                                />
+                                <span style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
+                                    Define los botones de peso rápido que verá el cliente.
+                                </span>
+                            </div>
+                        </>
+                    )}
 
                     <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
                         <div style={{ flex: 1 }}>
@@ -261,7 +320,7 @@ export function ProductForm({ product, onClose, onSave, categories }) {
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

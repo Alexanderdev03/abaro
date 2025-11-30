@@ -53,10 +53,10 @@ export function HomeView({
                             scrollSnapType: 'x mandatory'
                         }}
                     >
-                        {categories.map(cat => {
+                        {categories.map((cat, index) => {
                             const Icon = iconMap[cat.icon] || ShoppingBasket;
                             return (
-                                <div key={cat.id} onClick={() => handleCategoryClick(cat.name)} style={{ cursor: 'pointer', minWidth: '80px', scrollSnapAlign: 'start', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <div key={`${cat.id}-${index}`} onClick={() => handleCategoryClick(cat.name)} style={{ cursor: 'pointer', minWidth: '80px', scrollSnapAlign: 'start', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                     <div style={{
                                         backgroundColor: cat.color,
                                         width: '60px',

@@ -1,13 +1,13 @@
 import React, { useEffect } from 'react';
 import { CheckCircle, XCircle, Info } from 'lucide-react';
 
-export function Toast({ message, type = 'success', onClose }) {
+export function Toast({ message, type = 'success', onClose, duration = 2000 }) {
     useEffect(() => {
         const timer = setTimeout(() => {
             onClose();
-        }, 3000);
+        }, duration);
         return () => clearTimeout(timer);
-    }, [onClose]);
+    }, [message, duration]); // Reset timer when message changes
 
     const icons = {
         success: <CheckCircle size={20} />,

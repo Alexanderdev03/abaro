@@ -51,18 +51,44 @@ export function AdminCategories() {
                     <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#111827' }}>Gestión de Categorías</h2>
                     <p style={{ margin: '0.5rem 0 0', color: '#6b7280' }}>Administra las categorías y subcategorías de tus productos.</p>
                 </div>
-                <button
-                    onClick={() => { setEditingCategory(null); setIsFormOpen(true); }}
-                    style={{
-                        backgroundColor: '#3b82f6', color: 'white', border: 'none',
-                        padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600',
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
-                        boxShadow: '0 2px 5px rgba(59, 130, 246, 0.3)'
-                    }}
-                >
-                    <Plus size={20} />
-                    Nueva Categoría
-                </button>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button
+                        onClick={async () => {
+                            if (window.confirm('¿Deseas buscar y eliminar categorías duplicadas?')) {
+                                setLoading(true);
+                                try {
+                                    const count = await ProductService.removeDuplicateCategories();
+                                    alert(`Se eliminaron ${count} categorías duplicadas.`);
+                                    loadCategories();
+                                } catch (error) {
+                                    alert('Error al eliminar duplicados');
+                                }
+                                setLoading(false);
+                            }
+                        }}
+                        style={{
+                            backgroundColor: '#ef4444', color: 'white', border: 'none',
+                            padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
+                            boxShadow: '0 2px 5px rgba(239, 68, 68, 0.3)'
+                        }}
+                    >
+                        <Trash2 size={20} />
+                        Limpiar Duplicados
+                    </button>
+                    <button
+                        onClick={() => { setEditingCategory(null); setIsFormOpen(true); }}
+                        style={{
+                            backgroundColor: '#3b82f6', color: 'white', border: 'none',
+                            padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
+                            boxShadow: '0 2px 5px rgba(59, 130, 246, 0.3)'
+                        }}
+                    >
+                        <Plus size={20} />
+                        Nueva Categoría
+                    </button>
+                </div>
             </div>
 
             <div style={{ marginBottom: '1.5rem' }}>
@@ -95,7 +121,6 @@ export function AdminCategories() {
                                         backgroundColor: category.color || '#f3f4f6',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center'
                                     }}>
-                                        {/* Icon rendering could be dynamic if we map strings to components */}
                                         <List size={20} color="#374151" />
                                     </div>
                                     <div>
@@ -123,7 +148,7 @@ export function AdminCategories() {
 
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                                 {category.subcategories?.map((sub, idx) => (
-                                    <span key={idx} style={{
+                                    <span key={`${category.id}-sub-${idx}`} style={{
                                         fontSize: '0.8rem', padding: '0.25rem 0.75rem',
                                         backgroundColor: '#f9fafb', borderRadius: '999px',
                                         border: '1px solid #e5e7eb', color: '#4b5563'

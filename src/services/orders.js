@@ -56,5 +56,21 @@ export const OrderService = {
             console.error("Error updating status: ", e);
             return false;
         }
+    },
+
+    /**
+     * Deletes all orders from Firebase Firestore
+     * @returns {Promise<boolean>} - True if successful
+     */
+    async deleteAllOrders() {
+        try {
+            const querySnapshot = await getDocs(collection(db, 'orders'));
+            const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
+            await Promise.all(deletePromises);
+            return true;
+        } catch (e) {
+            console.error("Error deleting all orders: ", e);
+            throw e;
+        }
     }
 };

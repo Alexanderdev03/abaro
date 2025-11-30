@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronRight, Package, User, MapPin, Mail, Heart, LogOut, ArrowLeft, CheckCircle, Clock, Truck, Home, CreditCard } from 'lucide-react';
 import { ProductCard } from './ProductCard';
+import { OrderDetailsModal } from './common/OrderDetailsModal';
 
 export function Account({ user, orders, favorites, onLogout, onUpdateUser, onToggleFavorite, onAddToCart, onProductSelect }) {
     const [currentView, setCurrentView] = useState('menu'); // menu, orders, payment, personal, addresses, privacy, favorites
@@ -147,130 +148,6 @@ export function Account({ user, orders, favorites, onLogout, onUpdateUser, onTog
     // --- Sub-views ---
 
     if (currentView === 'orders') {
-        if (selectedOrder) {
-            // Order Details View
-            return (
-                <div style={{ backgroundColor: '#f5f5f5', minHeight: '100%' }}>
-                    <SectionHeader title={`Pedido #${selectedOrder.id}`} onBack={() => setSelectedOrder(null)} />
-
-                    <div style={{ padding: '1rem' }}>
-                        {/* Status Timeline */}
-                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', marginBottom: '1rem', boxShadow: 'var(--shadow-sm)' }}>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <div style={{ fontSize: '0.9rem', color: '#666' }}>Envío a domicilio</div>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#333' }}>Entregado el {selectedOrder.date}</div>
-                            </div>
-
-                            {/* Timeline Visual */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', marginTop: '2rem', marginBottom: '1rem' }}>
-                                {/* Line */}
-                                <div style={{ position: 'absolute', top: '50%', left: '0', right: '0', height: '2px', backgroundColor: '#e0e0e0', zIndex: 0 }}></div>
-                                <div style={{ position: 'absolute', top: '50%', left: '0', right: '0', height: '2px', backgroundColor: '#2e7d32', zIndex: 0, width: '100%' }}></div>
-
-                                {/* Steps */}
-                                {['Recibido', 'Preparando', 'En camino', 'Entrega'].map((step, idx) => (
-                                    <div key={idx} style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                        <div style={{
-                                            width: '12px',
-                                            height: '12px',
-                                            borderRadius: '50%',
-                                            backgroundColor: '#2e7d32',
-                                            border: '2px solid white',
-                                            boxShadow: '0 0 0 2px #2e7d32'
-                                        }}></div>
-                                        <span style={{ fontSize: '0.65rem', color: '#666', marginTop: '0.5rem', position: 'absolute', top: '15px', width: '60px', textAlign: 'center' }}>{step}</span>
-                                    </div>
-                                ))}
-                            </div>
-
-
-                        </div>
-
-                        {/* Address */}
-                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', marginBottom: '1rem', boxShadow: 'var(--shadow-sm)' }}>
-                            <h4 style={{ margin: 0, marginBottom: '0.5rem', fontSize: '1rem' }}>Dirección de entrega</h4>
-                            <div style={{ fontSize: '0.9rem', color: '#666' }}>
-                                <div>{user.name}</div>
-                                <div>Calle Principal 123, Centro</div>
-                                <div>Campeche, Camp.</div>
-                                <div>Tel: 981 123 4567</div>
-                            </div>
-                        </div>
-
-                        {/* Items */}
-                        <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '12px', marginBottom: '1rem', boxShadow: 'var(--shadow-sm)' }}>
-                            <div className="flex-between" style={{ marginBottom: '1rem' }}>
-                                <h4 style={{ margin: 0 }}>{selectedOrder.items.length} artículo{selectedOrder.items.length !== 1 ? 's' : ''}</h4>
-                            </div>
-
-                            {selectedOrder.items.map((item, idx) => (
-                                <div key={idx} style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', borderBottom: idx < selectedOrder.items.length - 1 ? '1px solid #eee' : 'none', paddingBottom: idx < selectedOrder.items.length - 1 ? '1rem' : '0' }}>
-                                    <img src={item.image} alt={item.name} style={{ width: '60px', height: '60px', objectFit: 'contain', borderRadius: '8px', backgroundColor: '#f9f9f9' }} />
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.25rem' }}>{item.name}</div>
-                                        <div style={{ fontSize: '0.8rem', color: '#666' }}>{item.quantity} pz</div>
-                                        <div style={{ fontSize: '1rem', fontWeight: 'bold', marginTop: '0.25rem' }}>${item.price.toFixed(2)}</div>
-                                    </div>
-                                </div>
-                            ))}
-
-                            <button
-                                onClick={() => onAddToCart(selectedOrder.items[0])} // Simplified for demo, ideally adds all
-                                style={{
-                                    width: '100%',
-                                    padding: '0.75rem',
-                                    backgroundColor: '#2e7d32',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '20px',
-                                    fontWeight: 'bold',
-                                    marginTop: '0.5rem',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '0.5rem'
-                                }}
-                            >
-                                + Agregar todo
-                            </button>
-                        </div>
-
-                        {/* Payment Method */}
-                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', marginBottom: '1rem', boxShadow: 'var(--shadow-sm)' }}>
-                            <h4 style={{ margin: 0, marginBottom: '1rem', fontSize: '1rem' }}>Método de pago</h4>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                <CreditCard size={24} color="#666" />
-                                <span>Pagar al recibir (Efectivo)</span>
-                            </div>
-                        </div>
-
-                        {/* Summary */}
-                        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', marginBottom: '2rem', boxShadow: 'var(--shadow-sm)' }}>
-                            <div className="flex-between" style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-                                <span style={{ color: '#666' }}>Subtotal</span>
-                                <span>${selectedOrder.total.toFixed(2)}</span>
-                            </div>
-                            <div className="flex-between" style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-                                <span style={{ color: '#666' }}>Descuento</span>
-                                <span style={{ color: '#2e7d32' }}>-$0.00</span>
-                            </div>
-                            <div className="flex-between" style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-                                <span style={{ color: '#666' }}>Costo de entrega</span>
-                                <span>$0.00</span>
-                            </div>
-                            <div className="flex-between" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #eee', fontWeight: 'bold', fontSize: '1.1rem' }}>
-                                <span>Total</span>
-                                <span>${selectedOrder.total.toFixed(2)}</span>
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
-            );
-        }
-
-        // List of Orders
         return (
             <div style={{ backgroundColor: '#f5f5f5', minHeight: '100%' }}>
                 <SectionHeader title="Pedidos" onBack={() => setCurrentView('menu')} />
@@ -286,10 +163,10 @@ export function Account({ user, orders, favorites, onLogout, onUpdateUser, onTog
                                 <div key={order.id} style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                         <span style={{ fontWeight: 'bold' }}>Pedido #{order.id}</span>
-                                        <span style={{ color: '#666', fontSize: '0.9rem' }}>{order.date}</span>
+                                        <span style={{ color: '#666', fontSize: '0.9rem' }}>{new Date(order.date).toLocaleDateString()}</span>
                                     </div>
                                     <div style={{ color: '#2e7d32', fontWeight: '500', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                                        {order.status}
+                                        {order.status || 'Pendiente'}
                                     </div>
                                     <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1rem' }}>
                                         {order.items.length} artículos • Total: ${order.total.toFixed(2)}
@@ -314,6 +191,13 @@ export function Account({ user, orders, favorites, onLogout, onUpdateUser, onTog
                         </div>
                     )}
                 </div>
+
+                {selectedOrder && (
+                    <OrderDetailsModal
+                        order={selectedOrder}
+                        onClose={() => setSelectedOrder(null)}
+                    />
+                )}
             </div>
         );
     }

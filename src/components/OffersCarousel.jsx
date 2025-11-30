@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const offers = [
+const defaultOffers = [
     {
         id: 1,
         title: "Martes de Frescura",
@@ -34,13 +34,35 @@ const offers = [
 
 export function OffersCarousel() {
     const [currentIndex, setCurrentIndex] = useState(0);
+    const [offers, setOffers] = useState(defaultOffers);
+
+    useEffect(() => {
+        const loadBanners = async () => {
+            try {
+                // Import dynamically to avoid circular dependencies if any, though not expected here
+                const { ContentService } = await import('../services/content');
+                const remoteBanners = await ContentService.getBanners();
+
+                if (remoteBanners.length > 0) {
+                    setOffers(remoteBanners);
+                } else {
+                    setOffers(defaultOffers);
+                }
+            } catch (error) {
+                console.error("Failed to load banners", error);
+                setOffers(defaultOffers);
+            }
+        };
+
+        loadBanners();
+    }, []);
 
     useEffect(() => {
         const interval = setInterval(() => {
             setCurrentIndex((prev) => (prev + 1) % offers.length);
         }, 4000);
         return () => clearInterval(interval);
-    }, []);
+    }, [offers.length]);
 
     const nextSlide = () => {
         setCurrentIndex((prev) => (prev + 1) % offers.length);
@@ -69,8 +91,8 @@ export function OffersCarousel() {
                         left: 0,
                         width: '100%',
                         height: '100%',
-                        backgroundColor: offer.color,
-                        color: offer.textColor,
+                        backgroundColor: offer.imageUrl ? '#000' : offer.color,
+                        color: offer.textColor || 'white',
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'center',
@@ -79,8 +101,28 @@ export function OffersCarousel() {
                         transform: `translateX(${(index - currentIndex) * 100}%)`,
                     }}
                 >
-                    <h2 style={{ fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>{offer.title}</h2>
-                    <p style={{ fontSize: '1.1rem', opacity: 0.9 }}>{offer.subtitle}</p>
+                    {offer.imageUrl ? (
+                        <>
+                            <img
+                                src={offer.imageUrl}
+                                alt={offer.title}
+                                style={{
+                                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                                    objectFit: 'cover', opacity: 0.6
+                                }}
+                            />
+                            <div style={{ position: 'relative', zIndex: 1 }}>
+                                <h2 style={{ fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                                    {offer.title}
+                                </h2>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <h2 style={{ fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>{offer.title}</h2>
+                            <p style={{ fontSize: '1.1rem', opacity: 0.9 }}>{offer.subtitle}</p>
+                        </>
+                    )}
                 </div>
             ))}
 
@@ -101,7 +143,8 @@ export function OffersCarousel() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    color: 'white'
+                    color: 'white',
+                    zIndex: 2
                 }}
             >
                 <ChevronLeft size={20} />
@@ -122,7 +165,8 @@ export function OffersCarousel() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    color: 'white'
+                    color: 'white',
+                    zIndex: 2
                 }}
             >
                 <ChevronRight size={20} />
@@ -135,7 +179,8 @@ export function OffersCarousel() {
                 left: '50%',
                 transform: 'translateX(-50%)',
                 display: 'flex',
-                gap: '8px'
+                gap: '8px',
+                zIndex: 2
             }}>
                 {offers.map((_, index) => (
                     <div

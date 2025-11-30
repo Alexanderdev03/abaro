@@ -1,40 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Edit, Save, X, Search } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Edit, Save, X, Search, Eye } from 'lucide-react';
+import { api } from '../../services/api';
 import { TableSkeleton } from '../common/Skeleton';
 import { EmptyState } from '../common/EmptyState';
+import { CustomerProfileModal } from './CustomerProfileModal';
 
 export function AdminCustomers() {
-    // Mock data or read from localStorage 'user'
     const [customers, setCustomers] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [editingId, setEditingId] = useState(null);
-    const [newPoints, setNewPoints] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
+
+    // Modal State
+    const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [customerHistory, setCustomerHistory] = useState([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
     useEffect(() => {
-        setLoading(true);
-        // Simulate API call
-        setTimeout(() => {
-            const localUser = JSON.parse(localStorage.getItem('user') || 'null');
-            setCustomers(localUser ? [localUser] : []);
-            setLoading(false);
-        }, 500);
+        loadCustomers();
     }, []);
 
-    const handleEditPoints = (customer) => {
-        setEditingId(customer.email); // Using email as ID for now since we have 1 user
-        setNewPoints(customer.wallet || 0);
+    const loadCustomers = async () => {
+        setLoading(true);
+        try {
+            const data = await api.users.getAll();
+            setCustomers(data);
+        } catch (error) {
+            console.error("Error loading customers:", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleSavePoints = (customer) => {
-        const updatedUser = { ...customer, wallet: parseInt(newPoints) };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        setCustomers([updatedUser]);
-        setEditingId(null);
+    const handleViewProfile = async (customer) => {
+        setSelectedCustomer(customer);
+        setIsModalOpen(true);
+        try {
+            const history = await api.users.getHistory(customer.email);
+            // Sort by date desc
+            history.sort((a, b) => new Date(b.date) - new Date(a.date));
+            setCustomerHistory(history);
+        } catch (error) {
+            console.error("Error loading history:", error);
+            setCustomerHistory([]);
+        }
     };
 
     const filteredCustomers = customers.filter(c =>
@@ -80,77 +92,71 @@ export function AdminCustomers() {
                 />
             ) : (
                 <>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                        <thead style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                            <tr>
-                                <th style={{ padding: '1rem', fontSize: '0.85rem', fontWeight: '600', color: '#6b7280' }}>Cliente</th>
-                                <th style={{ padding: '1rem', fontSize: '0.85rem', fontWeight: '600', color: '#6b7280' }}>Contacto</th>
-                                <th style={{ padding: '1rem', fontSize: '0.85rem', fontWeight: '600', color: '#6b7280' }}>Puntos</th>
-                                <th style={{ padding: '1rem', fontSize: '0.85rem', fontWeight: '600', color: '#6b7280' }}>Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {currentCustomers.map((customer, idx) => (
-                                <tr key={idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                    <td style={{ padding: '1rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                            <div style={{
-                                                width: '40px', height: '40px', borderRadius: '50%',
-                                                backgroundColor: '#e0f2fe', color: '#0284c7',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                fontWeight: 'bold'
-                                            }}>
-                                                {customer.name ? customer.name.charAt(0).toUpperCase() : 'U'}
-                                            </div>
-                                            <div>
-                                                <div style={{ fontWeight: '500', color: '#111827' }}>{customer.name || 'Usuario'}</div>
-                                                <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>ID: {idx + 1}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '1rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.9rem', color: '#4b5563' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <Mail size={14} /> {customer.email || 'No email'}
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <Phone size={14} /> {customer.phone || 'No phone'}
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '1rem' }}>
-                                        {editingId === customer.email ? (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <input
-                                                    type="number"
-                                                    value={newPoints}
-                                                    onChange={(e) => setNewPoints(e.target.value)}
-                                                    style={{ width: '60px', padding: '0.25rem', borderRadius: '4px', border: '1px solid #ccc' }}
-                                                />
-                                                <button onClick={() => handleSavePoints(customer)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'green' }}><Save size={16} /></button>
-                                                <button onClick={() => setEditingId(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'red' }}><X size={16} /></button>
-                                            </div>
-                                        ) : (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <span style={{ fontWeight: 'bold', color: '#ea580c' }}>{customer.wallet || 0} pts</span>
-                                                <button onClick={() => handleEditPoints(customer)} style={{ border: 'none', background: 'none', cursor: 'pointer', opacity: 0.5 }}>
-                                                    <Edit size={14} />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td style={{ padding: '1rem' }}>
-                                        <span style={{
-                                            padding: '0.25rem 0.75rem', backgroundColor: '#dcfce7', color: '#15803d',
-                                            borderRadius: '999px', fontSize: '0.75rem', fontWeight: '600'
-                                        }}>
-                                            Activo
-                                        </span>
-                                    </td>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '600px' }}>
+                            <thead style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                                <tr>
+                                    <th style={{ padding: '1rem', fontSize: '0.85rem', fontWeight: '600', color: '#6b7280' }}>Cliente</th>
+                                    <th style={{ padding: '1rem', fontSize: '0.85rem', fontWeight: '600', color: '#6b7280' }}>Contacto</th>
+                                    <th style={{ padding: '1rem', fontSize: '0.85rem', fontWeight: '600', color: '#6b7280' }}>Total Gastado</th>
+                                    <th style={{ padding: '1rem', fontSize: '0.85rem', fontWeight: '600', color: '#6b7280' }}>Acciones</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {currentCustomers.map((customer, idx) => (
+                                    <tr key={idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                        <td style={{ padding: '1rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <div style={{
+                                                    width: '40px', height: '40px', borderRadius: '50%',
+                                                    backgroundColor: '#e0f2fe', color: '#0284c7',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontWeight: 'bold'
+                                                }}>
+                                                    {customer.name ? customer.name.charAt(0).toUpperCase() : 'U'}
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontWeight: '500', color: '#111827' }}>{customer.name || 'Usuario'}</div>
+                                                    <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Pedidos: {customer.orders ? customer.orders.length : 0}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.9rem', color: '#4b5563' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <Mail size={14} /> {customer.email || 'No email'}
+                                                </div>
+                                                {customer.phone && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <Phone size={14} /> {customer.phone}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <span style={{ fontWeight: 'bold', color: '#111827' }}>
+                                                ${(customer.totalSpent || 0).toFixed(2)}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <button
+                                                onClick={() => handleViewProfile(customer)}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                    padding: '0.5rem 1rem', backgroundColor: '#f3f4f6',
+                                                    border: 'none', borderRadius: '6px', cursor: 'pointer',
+                                                    color: '#4f46e5', fontWeight: '500', fontSize: '0.875rem'
+                                                }}
+                                            >
+                                                <Eye size={16} />
+                                                Ver Perfil
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
 
                     {/* Pagination */}
                     {filteredCustomers.length > 0 && (
@@ -187,6 +193,14 @@ export function AdminCustomers() {
                         </div>
                     )}
                 </>
+            )}
+
+            {isModalOpen && (
+                <CustomerProfileModal
+                    customer={selectedCustomer}
+                    orderHistory={customerHistory}
+                    onClose={() => setIsModalOpen(false)}
+                />
             )}
         </div>
     );

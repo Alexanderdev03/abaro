@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
 import { X, CreditCard, Banknote, MapPin, Clock } from 'lucide-react';
 
-export function CheckoutModal({ onClose, onConfirm, total }) {
+export function CheckoutModal({ onClose, onConfirm, total, ...props }) {
     const [savedAddresses, setSavedAddresses] = useState(() => {
         const saved = localStorage.getItem('addresses');
         return saved ? JSON.parse(saved) : [];
     });
-    const [selectedAddressIndex, setSelectedAddressIndex] = useState(0);
+    const [selectedAddressIndex, setSelectedAddressIndex] = useState(() => {
+        const saved = localStorage.getItem('addresses');
+        const addresses = saved ? JSON.parse(saved) : [];
+        const lastUsed = localStorage.getItem('lastUsedAddress');
+        if (lastUsed && addresses.includes(lastUsed)) {
+            return addresses.indexOf(lastUsed);
+        }
+        return 0;
+    });
     const [showAddressForm, setShowAddressForm] = useState(savedAddresses.length === 0);
     const [newAddress, setNewAddress] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -24,6 +32,7 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
         const updated = [...savedAddresses, newAddress];
         setSavedAddresses(updated);
         localStorage.setItem('addresses', JSON.stringify(updated));
+        localStorage.setItem('lastUsedAddress', newAddress); // Save as last used
         setNewAddress('');
         setShowAddressForm(false);
         setSelectedAddressIndex(updated.length - 1);
@@ -33,8 +42,15 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
         setCouponError('');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const userCoupons = user.coupons || [];
+        const adminCoupons = JSON.parse(localStorage.getItem('adminCoupons') || '[]');
 
-        const validCoupon = userCoupons.find(c => c.code === couponCode);
+        // Check user coupons first
+        let validCoupon = userCoupons.find(c => c.code === couponCode);
+
+        // If not found, check global admin coupons
+        if (!validCoupon) {
+            validCoupon = adminCoupons.find(c => c.code === couponCode);
+        }
 
         if (validCoupon) {
             setAppliedCoupon(validCoupon);
@@ -62,6 +78,10 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
             finalAddress = savedAddresses[selectedAddressIndex];
         }
 
+        if (deliveryMethod === 'delivery') {
+            localStorage.setItem('lastUsedAddress', finalAddress);
+        }
+
         setIsProcessing(true);
         // setTimeout(() => {
         onConfirm({
@@ -78,7 +98,8 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
 
     // Calculate totals
     const couponDiscount = appliedCoupon ? appliedCoupon.discount : 0;
-    const finalPayable = Math.max(0, total - couponDiscount);
+    const shippingCost = deliveryMethod === 'delivery' ? (props.deliveryCost || 0) : 0;
+    const finalPayable = Math.max(0, total + shippingCost - couponDiscount);
 
     return (
         <div style={{
@@ -296,8 +317,12 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
                             {[
                                 { id: 'asap', label: 'Lo antes posible' },
-                                { id: 'morning', label: 'Mañana (10-12)' },
-                                { id: 'afternoon', label: 'Tarde (14-16)' }
+                                { id: 'morning_early', label: 'Mañana (08-10)' },
+                                { id: 'morning_late', label: 'Mañana (10-12)' },
+                                { id: 'afternoon_early', label: 'Tarde (12-14)' },
+                                { id: 'afternoon_mid', label: 'Tarde (14-16)' },
+                                { id: 'afternoon_late', label: 'Tarde (16-18)' },
+                                { id: 'night', label: 'Noche (18-20)' }
                             ].map(option => (
                                 <button
                                     key={option.id}
@@ -459,25 +484,9 @@ export function CheckoutModal({ onClose, onConfirm, total }) {
                         )}
                     </div>
 
-                    <div style={{
-                        borderTop: '1px solid #eee',
-                        paddingTop: '1rem',
-                        marginBottom: '1.5rem'
-                    }}>
-                        <div className="flex-between" style={{ marginBottom: '0.5rem', color: '#666' }}>
-                            <span>Subtotal (con puntos aplicados)</span>
-                            <span>${total.toFixed(2)}</span>
-                        </div>
-                        {appliedCoupon && (
-                            <div className="flex-between" style={{ marginBottom: '0.5rem', color: '#2e7d32' }}>
-                                <span>Descuento Cupón</span>
-                                <span>-${appliedCoupon.discount.toFixed(2)}</span>
-                            </div>
-                        )}
-                        <div className="flex-between" style={{ fontSize: '1.2rem', fontWeight: 'bold', marginTop: '0.5rem' }}>
-                            <span>Total a Pagar</span>
-                            <span style={{ color: 'var(--color-primary)' }}>${finalPayable.toFixed(2)}</span>
-                        </div>
+                    <div className="flex-between" style={{ fontSize: '1.2rem', fontWeight: 'bold', marginTop: '0.5rem' }}>
+                        <span>Total a Pagar</span>
+                        <span style={{ color: 'var(--color-primary)' }}>${finalPayable.toFixed(2)}</span>
                     </div>
 
                     <button

@@ -87,6 +87,20 @@ export function AdminPanel() {
             return (p.stock || 0) < 10;
         });
 
+        // Top Categories (Pie Chart Data)
+        const categorySales = {};
+        orders.forEach(order => {
+            order.items.forEach(item => {
+                const cat = item.category || 'Otros';
+                if (!categorySales[cat]) categorySales[cat] = 0;
+                categorySales[cat] += item.quantity;
+            });
+        });
+
+        const pieChartData = Object.entries(categorySales)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value);
+
         setStats({
             dailySales: daily,
             weeklySales: weekly,
@@ -96,7 +110,8 @@ export function AdminPanel() {
             averageTicket: orders.length > 0 ? (orders.reduce((acc, curr) => acc + (parseFloat(curr.total) || 0), 0) / orders.length) : 0,
             lowStockCount: lowStock.length,
             last7Days,
-            zeroMovement
+            zeroMovement,
+            pieChartData // Add this
         });
 
         setRecentOrders(orders.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5));
@@ -179,45 +194,91 @@ export function AdminPanel() {
                 </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
-                {/* Sales Chart */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
+                {/* Sales Chart (Bar) */}
                 <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                     <h3 style={{ margin: '0 0 1.5rem 0', fontSize: '1.1rem' }}>Ventas de los Últimos 7 Días</h3>
                     <div style={{ height: '200px', display: 'flex', alignItems: 'flex-end', gap: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #e5e7eb' }}>
-                        {stats.last7Days.map((day, index) => (
-                            <div key={index} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                                <div style={{
-                                    width: '100%',
-                                    height: `${(day.amount / (Math.max(...stats.last7Days.map(d => d.amount)) || 1)) * 150}px`,
-                                    backgroundColor: '#3b82f6',
-                                    borderRadius: '4px 4px 0 0',
-                                    transition: 'height 0.5s ease',
-                                    minHeight: '4px'
-                                }}></div>
-                                <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>{day.label}</span>
-                            </div>
-                        ))}
+                        {stats.last7Days.map((day, index) => {
+                            const maxVal = Math.max(...stats.last7Days.map(d => d.amount)) || 1;
+                            const height = (day.amount / maxVal) * 150;
+                            return (
+                                <div key={index} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', group: 'hover' }}>
+                                    <div style={{ position: 'relative', width: '100%', height: '150px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                                        <div style={{
+                                            width: '80%',
+                                            height: `${Math.max(height, 4)}px`,
+                                            backgroundColor: day.amount > 0 ? '#3b82f6' : '#e5e7eb',
+                                            borderRadius: '4px 4px 0 0',
+                                            transition: 'height 0.5s ease',
+                                            cursor: 'pointer'
+                                        }} title={`$${day.amount.toFixed(2)}`}></div>
+                                        {day.amount > 0 && (
+                                            <div style={{
+                                                position: 'absolute', bottom: '100%', marginBottom: '4px',
+                                                fontSize: '0.7rem', fontWeight: 'bold', color: '#3b82f6'
+                                            }}>
+                                                ${Math.round(day.amount)}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>{day.label}</span>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
-                {/* Zero Movement Products */}
+                {/* Categories Chart (Pie) */}
                 <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                    <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', color: '#ef4444' }}>Productos Sin Movimiento</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '250px', overflowY: 'auto' }}>
-                        {stats.zeroMovement.slice(0, 10).map((product, idx) => (
-                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', backgroundColor: '#fef2f2', borderRadius: '8px' }}>
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }}></div>
-                                <span style={{ fontSize: '0.9rem', color: '#7f1d1d' }}>{product.name}</span>
+                    <h3 style={{ margin: '0 0 1.5rem 0', fontSize: '1.1rem' }}>Categorías Más Vendidas</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', justifyContent: 'center' }}>
+                        {/* CSS Conic Gradient Pie Chart */}
+                        <div style={{
+                            width: '180px', height: '180px', borderRadius: '50%',
+                            background: `conic-gradient(
+                                ${(() => {
+                                    let currentDeg = 0;
+                                    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+                                    const total = stats.pieChartData?.reduce((acc, curr) => acc + curr.value, 0) || 0;
+                                    if (total === 0) return '#e5e7eb 0deg 360deg';
+
+                                    return stats.pieChartData?.map((cat, i) => {
+                                        const deg = (cat.value / total) * 360;
+                                        const str = `${colors[i % colors.length]} ${currentDeg}deg ${currentDeg + deg}deg`;
+                                        currentDeg += deg;
+                                        return str;
+                                    }).join(', ');
+                                })()}
+                            )`,
+                            position: 'relative'
+                        }}>
+                            {/* Inner Circle for Donut Effect */}
+                            <div style={{
+                                position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                                width: '120px', height: '120px', borderRadius: '50%', backgroundColor: 'white',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column'
+                            }}>
+                                <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#111827' }}>
+                                    {stats.pieChartData?.reduce((acc, curr) => acc + curr.value, 0) || 0}
+                                </span>
+                                <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>Items</span>
                             </div>
-                        ))}
-                        {stats.zeroMovement.length === 0 && (
-                            <div style={{ textAlign: 'center', color: '#9ca3af', padding: '1rem' }}>¡Todo se está vendiendo!</div>
-                        )}
-                        {stats.zeroMovement.length > 10 && (
-                            <div style={{ textAlign: 'center', fontSize: '0.8rem', color: '#6b7280', marginTop: '0.5rem' }}>
-                                +{stats.zeroMovement.length - 10} productos más
-                            </div>
-                        )}
+                        </div>
+
+                        {/* Legend */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {stats.pieChartData?.slice(0, 5).map((cat, i) => {
+                                const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+                                return (
+                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <div style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: colors[i % colors.length] }}></div>
+                                        <span style={{ fontSize: '0.9rem', color: '#4b5563' }}>{cat.name}</span>
+                                        <span style={{ fontSize: '0.8rem', color: '#9ca3af' }}>({cat.value})</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </div>

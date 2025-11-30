@@ -1,8 +1,8 @@
-
 import React, { useRef, useState, useEffect } from 'react';
 import { Save, Bell, Shield, Database, Upload, Download, Clock, Palette, Image as ImageIcon, Trash2, AlertTriangle } from 'lucide-react';
 import { Toast } from '../Toast';
 import { ProductService } from '../../services/products';
+import { ConfirmationModal } from '../ConfirmationModal';
 
 export function AdminSettings() {
     const fileInputRef = useRef(null);
@@ -10,7 +10,9 @@ export function AdminSettings() {
     const [settings, setSettings] = useState({
         storeName: 'Abarrotes Alex',
         phone: '9821041154',
+        whatsappNumber: '529821041154',
         address: 'Calle Principal #123, Col. Centro',
+        deliveryCost: 0,
         logo: null,
         primaryColor: '#004aad',
         secondaryColor: '#ffd700',
@@ -23,6 +25,16 @@ export function AdminSettings() {
             stock: true
         }
     });
+
+    const [modalConfig, setModalConfig] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        isDanger: false,
+        requiresInput: false
+    });
+    const [confirmInput, setConfirmInput] = useState('');
 
     useEffect(() => {
         const savedSettings = localStorage.getItem('storeSettings');
@@ -120,9 +132,58 @@ export function AdminSettings() {
         reader.readAsText(file);
     };
 
+    const handleResetDatabase = () => {
+        setModalConfig({
+            isOpen: true,
+            title: '¿Resetear Base de Datos?',
+            message: 'Esta acción eliminará TODOS los productos, categorías, pedidos y banners. La tienda quedará completamente vacía. Escribe "BORRAR TODO" para confirmar.',
+            isDanger: true,
+            requiresInput: true,
+            onConfirm: async () => {
+                if (confirmInput !== 'BORRAR TODO') {
+                    alert('Código de confirmación incorrecto.');
+                    return;
+                }
+                try {
+                    setToast({ message: 'Reseteando base de datos...', type: 'info' });
+                    // Dynamic imports to avoid circular dependencies
+                    const { ProductService } = await import('../../services/products');
+                    const { OrderService } = await import('../../services/orders');
+                    const { ContentService } = await import('../../services/content');
+
+                    await Promise.all([
+                        ProductService.deleteAllProducts(),
+                        ProductService.deleteAllCategories(),
+                        OrderService.deleteAllOrders(),
+                        // Delete all banners too
+                        ContentService.getBanners().then(banners =>
+                            Promise.all(banners.map(b => ContentService.deleteBanner(b.id)))
+                        )
+                    ]);
+
+                    alert('Base de datos reseteada correctamente. La página se recargará.');
+                    window.location.reload();
+                } catch (error) {
+                    console.error(error);
+                    setToast({ message: 'Error al resetear la base de datos', type: 'error' });
+                }
+            }
+        });
+        setConfirmInput('');
+    };
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+            <ConfirmationModal
+                isOpen={modalConfig.isOpen}
+                onClose={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={modalConfig.onConfirm}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                isDanger={modalConfig.isDanger}
+            />
 
             {/* General Settings */}
             <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
@@ -149,11 +210,31 @@ export function AdminSettings() {
                             />
                         </div>
                         <div>
+                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem' }}>Número de WhatsApp (Pedidos)</label>
+                            <input
+                                type="text"
+                                value={settings.whatsappNumber || ''}
+                                onChange={(e) => handleChange('whatsappNumber', e.target.value)}
+                                placeholder="Ej: 529811234567"
+                                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #d1d5db' }}
+                            />
+                            <small style={{ color: '#6b7280' }}>Incluye el código de país (52 para México) sin espacios.</small>
+                        </div>
+                        <div>
                             <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem' }}>Dirección</label>
                             <input
                                 type="text"
                                 value={settings.address}
                                 onChange={(e) => handleChange('address', e.target.value)}
+                                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #d1d5db' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem' }}>Costo de Envío Base ($)</label>
+                            <input
+                                type="number"
+                                value={settings.deliveryCost || 0}
+                                onChange={(e) => handleChange('deliveryCost', parseFloat(e.target.value))}
                                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #d1d5db' }}
                             />
                         </div>
@@ -216,47 +297,47 @@ export function AdminSettings() {
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div style={{ marginTop: '2rem', borderTop: '1px solid #e5e7eb', paddingTop: '1.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                        <Clock size={18} color="#4b5563" />
-                        <h4 style={{ margin: 0, fontSize: '1rem' }}>Horarios de Atención</h4>
+            <div style={{ marginTop: '2rem', borderTop: '1px solid #e5e7eb', paddingTop: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <Clock size={18} color="#4b5563" />
+                    <h4 style={{ margin: 0, fontSize: '1rem' }}>Horarios de Atención</h4>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                    <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.25rem' }}>Lunes a Viernes</label>
+                        <input
+                            type="text"
+                            value={settings.hours.weekdays}
+                            onChange={(e) => handleNestedChange('hours', 'weekdays', e.target.value)}
+                            style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                        />
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.25rem' }}>Lunes a Viernes</label>
-                            <input
-                                type="text"
-                                value={settings.hours.weekdays}
-                                onChange={(e) => handleNestedChange('hours', 'weekdays', e.target.value)}
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #d1d5db' }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.25rem' }}>Sábados y Domingos</label>
-                            <input
-                                type="text"
-                                value={settings.hours.weekends}
-                                onChange={(e) => handleNestedChange('hours', 'weekends', e.target.value)}
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #d1d5db' }}
-                            />
-                        </div>
+                    <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.25rem' }}>Sábados y Domingos</label>
+                        <input
+                            type="text"
+                            value={settings.hours.weekends}
+                            onChange={(e) => handleNestedChange('hours', 'weekends', e.target.value)}
+                            style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                        />
                     </div>
                 </div>
-
-                <button
-                    onClick={handleSave}
-                    style={{
-                        marginTop: '2rem',
-                        backgroundColor: '#3b82f6', color: 'white', border: 'none',
-                        padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: '0.5rem', width: 'fit-content'
-                    }}
-                >
-                    <Save size={18} />
-                    Guardar Cambios
-                </button>
             </div>
+
+            <button
+                onClick={handleSave}
+                style={{
+                    marginTop: '2rem',
+                    backgroundColor: '#3b82f6', color: 'white', border: 'none',
+                    padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '0.5rem', width: 'fit-content'
+                }}
+            >
+                <Save size={18} />
+                Guardar Cambios
+            </button>
 
             {/* Notifications & Security */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
@@ -341,39 +422,52 @@ export function AdminSettings() {
                         style={{ display: 'none' }}
                     />
                 </div>
+            </div>
 
-                {/* Danger Zone */}
-                <div style={{ backgroundColor: '#fef2f2', padding: '1.5rem', borderRadius: '12px', border: '1px solid #fee2e2' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                        <AlertTriangle size={20} color="#ef4444" />
-                        <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 'bold', color: '#991b1b' }}>Zona de Peligro</h3>
-                    </div>
-                    <p style={{ color: '#7f1d1d', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                        Estas acciones son destructivas y no se pueden deshacer. Ten cuidado.
+            {/* Danger Zone */}
+            <div style={{ marginTop: '3rem', borderTop: '1px solid #fee2e2', paddingTop: '2rem' }}>
+                <h3 style={{ color: '#dc2626', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <AlertTriangle size={20} />
+                    Zona de Peligro
+                </h3>
+                <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '12px', padding: '1.5rem' }}>
+                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#991b1b' }}>Resetear Base de Datos</h4>
+                    <p style={{ color: '#b91c1c', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                        Esta acción eliminará <strong>TODOS</strong> los productos, categorías, pedidos y banners.
+                        La tienda quedará completamente vacía. Esta acción no se puede deshacer.
                     </p>
 
+                    {modalConfig.requiresInput && modalConfig.isOpen && (
+                        <div style={{ marginBottom: '1rem' }}>
+                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem', color: '#991b1b' }}>
+                                Escribe "BORRAR TODO" para confirmar:
+                            </label>
+                            <input
+                                type="text"
+                                value={confirmInput}
+                                onChange={(e) => setConfirmInput(e.target.value)}
+                                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #ef4444' }}
+                            />
+                        </div>
+                    )}
+
                     <button
-                        onClick={async () => {
-                            if (window.confirm('¿ESTÁS SEGURO? Esto borrará TODOS los productos y categorías de la base de datos.')) {
-                                if (window.confirm('¿DE VERDAD? Esta acción es IRREVERSIBLE.')) {
-                                    try {
-                                        setToast({ message: 'Borrando datos...', type: 'info' });
-                                        await ProductService.deleteAllData();
-                                        setToast({ message: 'Base de datos limpiada correctamente', type: 'success' });
-                                    } catch (error) {
-                                        setToast({ message: 'Error al borrar datos', type: 'error' });
-                                    }
-                                }
-                            }
-                        }}
+                        onClick={handleResetDatabase}
                         style={{
-                            backgroundColor: '#ef4444', color: 'white', border: 'none',
-                            padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: '0.5rem'
+                            backgroundColor: '#dc2626',
+                            color: 'white',
+                            border: 'none',
+                            padding: '0.75rem 1.5rem',
+                            borderRadius: '8px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
                         }}
                     >
                         <Trash2 size={18} />
-                        Borrar Toda la Base de Datos
+                        Borrar Todo y Resetear
                     </button>
                 </div>
             </div>

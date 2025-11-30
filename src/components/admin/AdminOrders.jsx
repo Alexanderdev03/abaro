@@ -3,6 +3,7 @@ import { Clock, Package, Truck, CheckCircle, Search, Eye } from 'lucide-react';
 import { OrderService } from '../../services/orders';
 import { Skeleton } from '../common/Skeleton';
 import { EmptyState } from '../common/EmptyState';
+import { OrderDetailsModal } from '../common/OrderDetailsModal';
 
 const STATUS_COLUMNS = [
     { id: 'pending', label: 'Pendiente', icon: Clock, color: '#f59e0b', bg: '#fef3c7' },
@@ -16,6 +17,7 @@ export function AdminOrders() {
     const [loading, setLoading] = useState(true);
     const [draggedOrder, setDraggedOrder] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedOrder, setSelectedOrder] = useState(null);
 
     useEffect(() => {
         loadOrders();
@@ -164,7 +166,10 @@ export function AdminOrders() {
                                             <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
                                                 {order.customerName || 'Cliente'}
                                             </div>
-                                            <button style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#3b82f6' }}>
+                                            <button
+                                                onClick={() => setSelectedOrder(order)}
+                                                style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#3b82f6' }}
+                                            >
                                                 <Eye size={18} />
                                             </button>
                                         </div>
@@ -179,6 +184,13 @@ export function AdminOrders() {
                         </div>
                     ))}
                 </div>
+            )}
+
+            {selectedOrder && (
+                <OrderDetailsModal
+                    order={selectedOrder}
+                    onClose={() => setSelectedOrder(null)}
+                />
             )}
         </div>
     );

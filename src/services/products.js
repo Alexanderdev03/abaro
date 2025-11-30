@@ -53,8 +53,6 @@ export const ProductService = {
       }
 
       // 3. Stock Filter
-      // Note: Mixing 'where' on different fields with 'orderBy' can require composite indexes.
-      // We'll handle simple cases. Complex combinations might need index creation in Firebase Console.
       if (stockFilter === 'low') {
         constraints.push(where('stock', '<', 5));
       } else if (stockFilter === 'out') {
@@ -95,8 +93,20 @@ export const ProductService = {
     try {
       const querySnapshot = await getDocs(collection(db, "categories"));
       if (querySnapshot.empty) {
-        // Fallback to local if empty (or seed it)
-        return localCategories;
+        // Auto-seed if empty so we have deletable documents
+        console.log("Auto-seeding categories to Firestore...");
+        const seededCategories = [];
+        const categoriesRef = collection(db, "categories");
+
+        for (const cat of localCategories) {
+          try {
+            const docRef = await addDoc(categoriesRef, cat);
+            seededCategories.push({ id: docRef.id, ...cat });
+          } catch (e) {
+            console.error("Error seeding category:", e);
+          }
+        }
+        return seededCategories.length > 0 ? seededCategories : localCategories;
       }
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -215,22 +225,54 @@ export const ProductService = {
     onLog(`🏁 Proceso finalizado. Exitosos: ${successCount}, Errores: ${errorCount}`);
   },
 
-  deleteAllData: async () => {
+  deleteAllProducts: async () => {
     try {
       const productsRef = collection(db, "products");
-      const categoriesRef = collection(db, "categories");
-
       const pSnapshot = await getDocs(productsRef);
-      const cSnapshot = await getDocs(categoriesRef);
 
       const deletePromises = [];
       pSnapshot.docs.forEach(doc => deletePromises.push(deleteDoc(doc.ref)));
-      cSnapshot.docs.forEach(doc => deletePromises.push(deleteDoc(doc.ref)));
 
       await Promise.all(deletePromises);
       return true;
     } catch (error) {
-      console.error("Error deleting all data:", error);
+      console.error("Error deleting all products:", error);
+      throw error;
+    }
+  },
+
+  removeDuplicateCategories: async () => {
+    try {
+      const categoriesRef = collection(db, "categories");
+      const snapshot = await getDocs(categoriesRef);
+
+      if (snapshot.empty) return 0;
+
+      const categoriesByName = {};
+      const duplicatesToDelete = [];
+
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        // Handle potential missing name
+        const name = data.name ? data.name.trim().toLowerCase() : '';
+
+        if (name && categoriesByName[name]) {
+          // Found a duplicate, mark for deletion
+          duplicatesToDelete.push(doc.ref);
+        } else if (name) {
+          // First time seeing this name, keep it
+          categoriesByName[name] = true;
+        }
+      });
+
+      if (duplicatesToDelete.length > 0) {
+        console.log(`Found ${duplicatesToDelete.length} duplicate categories. Deleting...`);
+        await Promise.all(duplicatesToDelete.map(ref => deleteDoc(ref)));
+      }
+
+      return duplicatesToDelete.length;
+    } catch (error) {
+      console.error("Error removing duplicate categories:", error);
       throw error;
     }
   }

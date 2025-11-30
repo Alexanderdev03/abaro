@@ -13,6 +13,7 @@ import { Flyer } from './components/Flyer';
 import { StoreMap } from './components/StoreMap';
 import { FlashSale } from './components/FlashSale';
 import { ComboSection } from './components/ComboSection';
+import { BulkProductModal } from './components/BulkProductModal';
 
 import { AdminRouter } from './components/admin/AdminRouter';
 import { Account } from './components/Account';
@@ -36,14 +37,24 @@ function App() {
 
   const loadData = async () => {
     try {
-      const allProducts = await api.products.getAll();
-      const allCategories = await api.products.getCategories();
-      setProducts(allProducts);
-      setCategories(allCategories);
-      setIsDataLoaded(true);
-      setIsLoading(false);
+      const [productsData, categoriesData] = await Promise.all([
+        api.products.getAll(),
+        api.products.getCategories()
+      ]);
+
+      // Deduplicate products by ID to prevent key collisions
+      const uniqueProducts = Array.from(new Map(productsData.map(item => [item.id, item])).values());
+
+      // Deduplicate categories by ID
+      const uniqueCategories = Array.from(new Map(categoriesData.map(item => [item.id, item])).values());
+
+      setProducts(uniqueProducts);
+      setCategories(uniqueCategories);
     } catch (error) {
       console.error("Error loading data:", error);
+      showToast('Error al cargar datos', 'error');
+    } finally {
+      setIsDataLoaded(true);
       setIsLoading(false);
     }
   };
@@ -70,6 +81,7 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
+  const [selectedBulkProduct, setSelectedBulkProduct] = useState(null);
   const { user, logout, setUser } = useAuth();
   const [isScanning, setIsScanning] = useState(false);
   const [orders, setOrders] = useState(() => {
@@ -163,6 +175,15 @@ function App() {
   };
 
   const addToCart = (product, event) => {
+    // Refresh product from state to ensure we have latest flags like isBulk
+    const freshProduct = products.find(p => p.id === product.id) || product;
+
+    // Check for bulk product
+    if (freshProduct.isBulk) {
+      setSelectedBulkProduct(freshProduct);
+      return;
+    }
+
     // Trigger animation if event is provided
     if (event) {
       const rect = event.currentTarget.getBoundingClientRect();
@@ -181,15 +202,51 @@ function App() {
     setTimeout(() => setCartAnimating(false), 400);
 
     setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
+      const existing = prev.find(item => item.id === product.id && !item.isBulkSelection);
       if (existing) {
         showToast(`Cantidad actualizada: ${product.name} `);
         return prev.map(item =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === product.id && !item.isBulkSelection ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
       showToast(`${product.name} agregado al carrito`);
       return [...prev, { ...product, quantity: 1 }];
+    });
+  };
+
+  const handleBulkAddToCart = (bulkItem) => {
+    setSelectedBulkProduct(null);
+    setCartAnimating(true);
+    setTimeout(() => setCartAnimating(false), 400);
+
+    setCart(prev => {
+      // Check if same product with same bulk details exists
+      const existingIndex = prev.findIndex(item =>
+        item.id === bulkItem.id &&
+        item.isBulkSelection &&
+        item.bulkMode === bulkItem.bulkMode &&
+        item.notes === bulkItem.notes
+      );
+
+      if (existingIndex >= 0) {
+        // Update existing item
+        const newCart = [...prev];
+        const existing = newCart[existingIndex];
+
+        newCart[existingIndex] = {
+          ...existing,
+          cartQuantity: existing.cartQuantity + bulkItem.cartQuantity,
+          weight: existing.weight + bulkItem.weight,
+          totalPrice: existing.totalPrice + bulkItem.totalPrice,
+          // Recalculate unit price effectively (it stays same per unit/kg but total changes)
+          quantity: 1 // Keep quantity 1 for cart logic, we use totalPrice
+        };
+        showToast(`Cantidad actualizada: ${bulkItem.name}`);
+        return newCart;
+      }
+
+      showToast(`${bulkItem.name} agregado al carrito`);
+      return [...prev, { ...bulkItem, quantity: 1 }]; // quantity 1 because price is already total
     });
   };
 
@@ -215,14 +272,32 @@ function App() {
     showToast(`¡Combo ${combo.name} agregado!`);
   };
 
-  const removeFromCart = (productId) => {
-    setCart(prev => prev.filter(item => item.id !== productId));
+  const removeFromCart = (productId, index) => {
+    // If index is provided, remove by index (safer for duplicates/bulk items)
+    if (typeof index === 'number') {
+      setCart(prev => prev.filter((_, i) => i !== index));
+    } else {
+      // Fallback for legacy calls
+      setCart(prev => prev.filter(item => item.id !== productId));
+    }
     showToast('Producto eliminado del carrito', 'info');
   };
 
-  const updateQuantity = (productId, change) => {
-    setCart(prev => prev.map(item => {
-      if (item.id === productId) {
+  const updateQuantity = (index, change) => {
+    setCart(prev => prev.map((item, i) => {
+      if (i === index) {
+        if (item.isBulkSelection) {
+          // For bulk items, we can't easily just "add 1". 
+          // Maybe we just remove if quantity goes to 0?
+          // Or we could multiply the weight/price?
+          // For simplicity, let's just allow removing.
+          if (change < 0 && item.quantity + change <= 0) return null;
+          // If user wants more, they should add again? Or we duplicate the pack?
+          // Let's just allow removing for now or duplicating the entire "pack".
+          // Actually, let's just disable quantity editing for bulk items in this simple view
+          // and only allow delete.
+          return item;
+        }
         const newQuantity = Math.max(0, item.quantity + change);
         return newQuantity === 0 ? null : { ...item, quantity: newQuantity };
       }
@@ -322,7 +397,8 @@ function App() {
       id: Math.floor(Math.random() * 1000000),
       date: new Date().toLocaleDateString(),
       items: [...cart],
-      total: Math.max(0, cart.reduce((acc, item) => acc + (item.price * item.quantity), 0) - (pointsToUse * 0.1)), // 1 point = $0.10
+      items: [...cart],
+      total: Math.max(0, cart.reduce((acc, item) => acc + (item.isBulkSelection ? item.totalPrice : (item.price * item.quantity)), 0) - (pointsToUse * 0.1)), // 1 point = $0.10
       pointsUsed: pointsToUse,
       status: 'En camino'
     };
@@ -384,13 +460,21 @@ function App() {
     showToast('¡Pedido realizado con éxito!');
 
     // WhatsApp Integration
-    // User requested number: 982104114 (9 digits) but Mexico is 10 digits.
-    // Assuming 9821041154 based on previous context or 982104114 is a typo.
-    // I will use 52 + 9821041154 for now as it is safer, but if user insists on 114 I'll change it.
-    // Actually, let's try to be smart. If user typed 982104114, maybe they missed a digit.
-    // I'll stick to the 10 digit version I had which was 9821041154.
-    const phoneNumber = "529821041154";
-    const itemsList = newOrder.items.map(item => `- ${item.name} x${item.quantity} ($${(item.price * item.quantity).toFixed(2)})`).join('\n');
+    const storeSettings = JSON.parse(localStorage.getItem('storeSettings') || '{}');
+    const phoneNumber = storeSettings.whatsappNumber || "529821041154";
+
+    const itemsList = newOrder.items.map(item => {
+      let desc = `- ${item.name}`;
+      if (item.isBulkSelection) {
+        desc += ` (${item.cartQuantity} ${item.cartUnit})`;
+        if (item.notes) desc += ` [Nota: ${item.notes}]`;
+        desc += ` ($${item.totalPrice.toFixed(2)})`;
+      } else {
+        desc += ` x${item.quantity} ($${(item.price * item.quantity).toFixed(2)})`;
+      }
+      return desc;
+    }).join('\n');
+
     const message = `¡Hola! Quiero realizar un pedido en Abarrotes Alex.\n\n*Pedido #${newOrder.id}*\n\n*Productos:*\n${itemsList}\n\n*Total: $${newOrder.total.toFixed(2)}*\n\n*Dirección de Entrega:*\n${details.address}\n\n*Método de Pago:*\n${details.paymentMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}`;
 
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
@@ -403,7 +487,7 @@ function App() {
   };
 
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
-  const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const cartTotal = cart.reduce((acc, item) => acc + (item.isBulkSelection ? item.totalPrice : (item.price * item.quantity)), 0);
   const discountAmount = pointsToUse * 0.1; // 1 point = $0.10
   const finalTotal = Math.max(0, cartTotal - discountAmount);
 
@@ -456,7 +540,9 @@ function App() {
       const query = searchQuery.toLowerCase();
       return result.filter(p =>
         p.name.toLowerCase().includes(query) ||
-        p.description?.toLowerCase().includes(query)
+        p.description?.toLowerCase().includes(query) ||
+        p.category?.toLowerCase().includes(query) ||
+        p.subcategory?.toLowerCase().includes(query)
       );
     }
 
@@ -512,8 +598,17 @@ function App() {
   useEffect(() => {
     // Check URL hash on mount to set initial tab
     const hash = window.location.hash.replace('#', '');
-    if (hash && hash !== 'producto') {
-      setActiveTab(hash);
+    if (hash) {
+      if (hash.startsWith('categoria-')) {
+        const catName = decodeURIComponent(hash.replace('categoria-', ''));
+        setSelectedCategory(catName);
+        setActiveTab('home');
+      } else if (['cart', 'admin', 'profile', 'categories', 'combos'].includes(hash)) {
+        setActiveTab(hash);
+      } else {
+        // Default to home for unknown hashes or 'producto'
+        setActiveTab('home');
+      }
     }
 
     const handlePopState = (event) => {
@@ -605,6 +700,13 @@ function App() {
 
   return (
     <div className="app-container">
+      {selectedBulkProduct && (
+        <BulkProductModal
+          product={selectedBulkProduct}
+          onClose={() => setSelectedBulkProduct(null)}
+          onAdd={handleBulkAddToCart}
+        />
+      )}
       {isScanning && <BarcodeScanner onScan={handleScan} onClose={() => setIsScanning(false)} />}
       <Header
         searchQuery={searchQuery}
@@ -787,8 +889,8 @@ function App() {
             ) : (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {cart.map((item) => (
-                    <div key={item.id} style={{
+                  {cart.map((item, index) => (
+                    <div key={index} style={{
                       backgroundColor: 'white',
                       padding: '1rem',
                       borderRadius: 'var(--radius)',
@@ -800,48 +902,59 @@ function App() {
                         <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div className="flex-between" style={{ alignItems: 'flex-start' }}>
-                          <h4 style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>{item.name}</h4>
-                          <button onClick={() => removeFromCart(item.id)} style={{ color: '#999' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                          <h4 style={{ margin: 0, fontSize: '1rem' }}>{item.name}</h4>
+                          <button
+                            onClick={() => removeFromCart(item.id, index)}
+                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                          >
                             <Trash2 size={18} />
                           </button>
                         </div>
-                        {item.originalPrice && item.originalPrice > item.price ? (
-                          <div style={{ marginBottom: '0.5rem' }}>
-                            <span style={{ fontSize: '0.85rem', color: '#999', textDecoration: 'line-through', marginRight: '8px' }}>
-                              ${item.originalPrice.toFixed(2)}
-                            </span>
-                            <span className="text-primary" style={{ fontWeight: 'bold', color: '#d32f2f' }}>
-                              ${item.price.toFixed(2)}
-                            </span>
+
+                        {item.isBulkSelection ? (
+                          <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem' }}>
+                            <div>
+                              {item.cartQuantity} {item.cartUnit}
+                              {item.cartUnit === 'pz' && item.averageWeight && ` (~${(item.cartQuantity * item.averageWeight).toFixed(3)} kg)`}
+                            </div>
+                            {item.notes && (
+                              <div style={{ fontSize: '0.85rem', fontStyle: 'italic', color: '#888', marginTop: '2px' }}>
+                                Nota: "{item.notes}"
+                              </div>
+                            )}
+                            <div style={{ fontWeight: 'bold', color: 'var(--color-primary)', marginTop: '4px' }}>
+                              ${(item.totalPrice || 0).toFixed(2)}
+                            </div>
                           </div>
                         ) : (
-                          <p className="text-primary" style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                            ${item.price.toFixed(2)}
-                          </p>
+                          <>
+                            <div style={{ color: 'var(--color-primary)', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                              ${(item.price || 0).toFixed(2)}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                              <button
+                                onClick={() => updateQuantity(index, -1)}
+                                style={{
+                                  width: '28px', height: '28px', borderRadius: '50%', border: '1px solid #ddd',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'white'
+                                }}
+                              >
+                                <Minus size={16} />
+                              </button>
+                              <span style={{ fontWeight: '600' }}>{item.quantity}</span>
+                              <button
+                                onClick={() => updateQuantity(index, 1)}
+                                style={{
+                                  width: '28px', height: '28px', borderRadius: '50%', border: '1px solid #ddd',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'white'
+                                }}
+                              >
+                                <Plus size={16} />
+                              </button>
+                            </div>
+                          </>
                         )}
-
-                        <div style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          backgroundColor: '#f5f5f5',
-                          borderRadius: '8px',
-                          padding: '2px'
-                        }}>
-                          <button
-                            onClick={() => updateQuantity(item.id, -1)}
-                            style={{ padding: '4px 8px' }}
-                          >
-                            <Minus size={14} />
-                          </button>
-                          <span style={{ padding: '0 8px', fontWeight: '600', fontSize: '0.9rem' }}>{item.quantity}</span>
-                          <button
-                            onClick={() => updateQuantity(item.id, 1)}
-                            style={{ padding: '4px 8px' }}
-                          >
-                            <Plus size={14} />
-                          </button>
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -994,159 +1107,166 @@ function App() {
               </div>
             )}
           </div>
-        )}
+        )
+        }
 
-        {activeTab === 'profile' && (
-          <Account
-            user={user}
-            orders={orders}
-            favorites={favorites}
-            onLogout={handleLogout}
-            onUpdateUser={(updatedUser) => {
-              setUser(updatedUser);
-              localStorage.setItem('user', JSON.stringify(updatedUser));
-            }}
-            onToggleFavorite={toggleFavorite}
-            onAddToCart={addToCart}
-            onProductSelect={handleOpenProduct}
-          />
-        )}
-        {activeTab === 'points' && (
-          <div style={{ padding: '1rem' }}>
-            <h2 style={{ marginBottom: '1.5rem' }}>Mis Puntos y Cupones</h2>
+        {
+          activeTab === 'profile' && (
+            <Account
+              user={user}
+              orders={orders}
+              favorites={favorites}
+              onLogout={handleLogout}
+              onUpdateUser={(updatedUser) => {
+                setUser(updatedUser);
+                localStorage.setItem('user', JSON.stringify(updatedUser));
+              }}
+              onToggleFavorite={toggleFavorite}
+              onAddToCart={addToCart}
+              onProductSelect={handleOpenProduct}
+            />
+          )
+        }
+        {
+          activeTab === 'points' && (
+            <div style={{ padding: '1rem' }}>
+              <h2 style={{ marginBottom: '1.5rem' }}>Mis Puntos y Cupones</h2>
 
-            {/* Wallet & Loyalty Section */}
-            <div style={{
-              backgroundColor: 'var(--color-primary)',
-              color: 'white',
-              padding: '1.5rem',
-              borderRadius: '12px',
-              marginBottom: '1.5rem',
-              position: 'relative',
-              overflow: 'hidden',
-              boxShadow: 'var(--shadow-md)'
-            }}>
-              <div style={{ position: 'relative', zIndex: 1 }}>
-                <div style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '0.5rem' }}>Monedero Electrónico</div>
-                <div style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '0.5rem' }}>
-                  {user.wallet || 0} pts
+              {/* Wallet & Loyalty Section */}
+              <div style={{
+                backgroundColor: 'var(--color-primary)',
+                color: 'white',
+                padding: '1.5rem',
+                borderRadius: '12px',
+                marginBottom: '1.5rem',
+                position: 'relative',
+                overflow: 'hidden',
+                boxShadow: 'var(--shadow-md)'
+              }}>
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                  <div style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '0.5rem' }}>Monedero Electrónico</div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '0.5rem' }}>
+                    {user.wallet || 0} pts
+                  </div>
+                  <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+                    Equivale a ${(user.wallet * 0.10).toFixed(2)} MXN
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
-                  Equivale a ${(user.wallet * 0.10).toFixed(2)} MXN
-                </div>
+
+                {/* Decorative circles */}
+                <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '100px', height: '100px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+                <div style={{ position: 'absolute', bottom: '-30px', left: '-10px', width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
               </div>
 
-              {/* Decorative circles */}
-              <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '100px', height: '100px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
-              <div style={{ position: 'absolute', bottom: '-30px', left: '-10px', width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
-            </div>
+              {/* Rewards Center */}
+              <div style={{ marginBottom: '2rem' }}>
+                <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Centro de Recompensas 🎁</h3>
 
-            {/* Rewards Center */}
-            <div style={{ marginBottom: '2rem' }}>
-              <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Centro de Recompensas 🎁</h3>
-
-              {/* Coupons Exchange */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ fontSize: '0.9rem', marginBottom: '0.75rem', color: '#666' }}>Canjea tus puntos por cupones</h4>
-                <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-                  {[
-                    { points: 500, discount: 10, code: 'DESC10' },
-                    { points: 1000, discount: 25, code: 'DESC25' },
-                    { points: 2000, discount: 50, code: 'DESC50' }
-                  ].map((coupon, idx) => (
-                    <div key={idx} style={{
-                      minWidth: '200px',
-                      backgroundColor: 'white',
-                      padding: '1rem',
-                      borderRadius: '12px',
-                      border: '1px dashed var(--color-primary)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--color-primary)', marginBottom: '0.25rem' }}>
-                        ${coupon.discount} MXN
-                      </div>
-                      <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.75rem' }}>
-                        por {coupon.points} puntos
-                      </div>
-                      <button
-                        onClick={() => {
-                          if ((user.wallet || 0) >= coupon.points) {
-                            const updatedUser = {
-                              ...user,
-                              wallet: user.wallet - coupon.points,
-                              coupons: [...(user.coupons || []), { ...coupon, id: Date.now() }]
-                            };
-                            setUser(updatedUser);
-                            localStorage.setItem('user', JSON.stringify(updatedUser));
-                            showToast(`¡Cupón de $${coupon.discount} canjeado!`);
-                          } else {
-                            showToast('Puntos insuficientes', 'error');
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '0.5rem',
-                          backgroundColor: (user.wallet || 0) >= coupon.points ? 'var(--color-primary)' : '#ccc',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '8px',
-                          cursor: (user.wallet || 0) >= coupon.points ? 'pointer' : 'not-allowed',
-                          fontSize: '0.9rem',
-                          fontWeight: '600'
-                        }}
-                      >
-                        Canjear
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* My Coupons */}
-              <div>
-                <h4 style={{ fontSize: '0.9rem', marginBottom: '0.75rem', color: '#666' }}>Mis Cupones Activos</h4>
-                {(!user.coupons || user.coupons.length === 0) ? (
-                  <p style={{ fontSize: '0.9rem', color: '#999', fontStyle: 'italic' }}>No tienes cupones activos.</p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {user.coupons.map((coupon, idx) => (
-                      <div key={idx} className="flex-between" style={{
-                        backgroundColor: '#fff3e0',
-                        padding: '0.75rem 1rem',
-                        borderRadius: '8px',
-                        borderLeft: '4px solid #ff9800'
+                {/* Coupons Exchange */}
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <h4 style={{ fontSize: '0.9rem', marginBottom: '0.75rem', color: '#666' }}>Canjea tus puntos por cupones</h4>
+                  <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+                    {[
+                      { points: 500, discount: 10, code: 'DESC10' },
+                      { points: 1000, discount: 25, code: 'DESC25' },
+                      { points: 2000, discount: 50, code: 'DESC50' }
+                    ].map((coupon, idx) => (
+                      <div key={idx} style={{
+                        minWidth: '200px',
+                        backgroundColor: 'white',
+                        padding: '1rem',
+                        borderRadius: '12px',
+                        border: '1px dashed var(--color-primary)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        textAlign: 'center'
                       }}>
-                        <div>
-                          <div style={{ fontWeight: 'bold', color: '#e65100' }}>Cupón ${coupon.discount} MXN</div>
-                          <div style={{ fontSize: '0.8rem', color: '#666' }}>Código: {coupon.code}</div>
+                        <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--color-primary)', marginBottom: '0.25rem' }}>
+                          ${coupon.discount} MXN
                         </div>
-                        <span style={{ fontSize: '1.5rem' }}>🎟️</span>
+                        <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.75rem' }}>
+                          por {coupon.points} puntos
+                        </div>
+                        <button
+                          onClick={() => {
+                            if ((user.wallet || 0) >= coupon.points) {
+                              const updatedUser = {
+                                ...user,
+                                wallet: user.wallet - coupon.points,
+                                coupons: [...(user.coupons || []), { ...coupon, id: Date.now() }]
+                              };
+                              setUser(updatedUser);
+                              localStorage.setItem('user', JSON.stringify(updatedUser));
+                              showToast(`¡Cupón de $${coupon.discount} canjeado!`);
+                            } else {
+                              showToast('Puntos insuficientes', 'error');
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '0.5rem',
+                            backgroundColor: (user.wallet || 0) >= coupon.points ? 'var(--color-primary)' : '#ccc',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: (user.wallet || 0) >= coupon.points ? 'pointer' : 'not-allowed',
+                            fontSize: '0.9rem',
+                            fontWeight: '600'
+                          }}
+                        >
+                          Canjear
+                        </button>
                       </div>
                     ))}
                   </div>
-                )}
+                </div>
+
+                {/* My Coupons */}
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', marginBottom: '0.75rem', color: '#666' }}>Mis Cupones Activos</h4>
+                  {(!user.coupons || user.coupons.length === 0) ? (
+                    <p style={{ fontSize: '0.9rem', color: '#999', fontStyle: 'italic' }}>No tienes cupones activos.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {user.coupons.map((coupon, idx) => (
+                        <div key={idx} className="flex-between" style={{
+                          backgroundColor: '#fff3e0',
+                          padding: '0.75rem 1rem',
+                          borderRadius: '8px',
+                          borderLeft: '4px solid #ff9800'
+                        }}>
+                          <div>
+                            <div style={{ fontWeight: 'bold', color: '#e65100' }}>Cupón ${coupon.discount} MXN</div>
+                            <div style={{ fontSize: '0.8rem', color: '#666' }}>Código: {coupon.code}</div>
+                          </div>
+                          <span style={{ fontSize: '1.5rem' }}>🎟️</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-        {activeTab === 'admin' && (
-          <AdminLayout activeView={adminView} onViewChange={setAdminView} onLogout={() => setActiveTab('home')}>
-            {adminView === 'dashboard' && <AdminPanel />}
-            {adminView === 'products' && <AdminProducts />}
-            {adminView === 'categories' && <AdminCategories />}
-            {adminView === 'orders' && <AdminOrders />}
-            {adminView === 'customers' && <AdminCustomers />}
-            {adminView === 'promos' && <AdminPromotions />}
-            {adminView === 'combos' && <AdminCombos />}
-            {adminView === 'pos' && <AdminPOS />}
-            {adminView === 'content' && <AdminContent />}
-            {adminView === 'settings' && <AdminSettings />}
-          </AdminLayout>
-        )}
-      </main>
+          )
+        }
+        {
+          activeTab === 'admin' && (
+            <AdminLayout activeView={adminView} onViewChange={setAdminView} onLogout={() => setActiveTab('home')}>
+              {adminView === 'dashboard' && <AdminPanel />}
+              {adminView === 'products' && <AdminProducts />}
+              {adminView === 'categories' && <AdminCategories />}
+              {adminView === 'orders' && <AdminOrders />}
+              {adminView === 'customers' && <AdminCustomers />}
+              {adminView === 'promos' && <AdminPromotions />}
+              {adminView === 'combos' && <AdminCombos />}
+              {adminView === 'pos' && <AdminPOS />}
+              {adminView === 'content' && <AdminContent />}
+              {adminView === 'settings' && <AdminSettings />}
+            </AdminLayout>
+          )
+        }
+      </main >
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} cartCount={cartCount} isAnimating={cartAnimating} user={user} />
 
@@ -1182,6 +1302,7 @@ function App() {
             onClose={() => setShowCheckout(false)}
             onConfirm={handleConfirmOrder}
             total={cartTotal}
+            deliveryCost={JSON.parse(localStorage.getItem('storeSettings') || '{}').deliveryCost || 0}
           />
         )
       }
@@ -1215,6 +1336,7 @@ function App() {
             message={toast.message}
             type={toast.type}
             onClose={() => setToast(null)}
+            duration={200}
           />
         )
       }
@@ -1226,12 +1348,14 @@ function App() {
         )
       }
       {/* Barcode Scanner Overlay */}
-      {isScanning && (
-        <BarcodeScanner
-          onClose={() => setIsScanning(false)}
-          onScan={handleScan}
-        />
-      )}
+      {
+        isScanning && (
+          <BarcodeScanner
+            onClose={() => setIsScanning(false)}
+            onScan={handleScan}
+          />
+        )
+      }
     </div >
   );
 }

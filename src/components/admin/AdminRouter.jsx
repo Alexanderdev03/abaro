@@ -9,7 +9,6 @@ import { AdminContent } from './AdminContent';
 import { AdminSettings } from './AdminSettings';
 import { AdminCombos } from './AdminCombos';
 import { AdminCategories } from './AdminCategories';
-import { AdminPOS } from './AdminPOS';
 
 export function AdminRouter({ activeView, onViewChange, onLogout, onExit }) {
     return (
@@ -28,12 +27,11 @@ export function AdminRouter({ activeView, onViewChange, onLogout, onExit }) {
             {activeView === 'settings' && <AdminSettings />}
             {activeView === 'combos' && <AdminCombos />}
             {activeView === 'categories' && <AdminCategories />}
-            {activeView === 'pos' && <AdminPOS />}
 
             {/* Placeholder for other views */}
             {activeView !== 'dashboard' && activeView !== 'products' && activeView !== 'orders' &&
                 activeView !== 'customers' && activeView !== 'promos' && activeView !== 'content' &&
-                activeView !== 'settings' && activeView !== 'combos' && activeView !== 'categories' && activeView !== 'pos' && (
+                activeView !== 'settings' && activeView !== 'combos' && activeView !== 'categories' && (
                     <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
                         <h2>Sección en construcción: {activeView}</h2>
                         <p>Pronto podrás gestionar {activeView} desde aquí.</p>

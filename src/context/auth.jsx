@@ -38,6 +38,11 @@ export function AuthProvider({ children }) {
                     }
                 }
 
+                // Hardcoded Admin Access
+                if (appUser.email && appUser.email.toLowerCase() === 'alexanderdayanperazacasanova@gmail.com') {
+                    appUser.role = 'admin';
+                }
+
                 setUser(appUser);
                 localStorage.setItem('user', JSON.stringify(appUser));
             } else {
