@@ -35,12 +35,22 @@ function App() {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [pointValue, setPointValue] = useState(0.10);
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+
   const loadData = async () => {
     try {
-      const [productsData, categoriesData] = await Promise.all([
+      const { ContentService } = await import('./services/content');
+      const [productsData, categoriesData, settingsData, couponsData] = await Promise.all([
         api.products.getAll(),
-        api.products.getCategories()
+        api.products.getCategories(),
+        ContentService.getSettings(),
+        ContentService.getCoupons()
       ]);
+
+      if (settingsData && settingsData.pointValue) {
+        setPointValue(Number(settingsData.pointValue));
+      }
 
       // Deduplicate products by ID to prevent key collisions
       const uniqueProducts = Array.from(new Map(productsData.map(item => [item.id, item])).values());
@@ -50,6 +60,7 @@ function App() {
 
       setProducts(uniqueProducts);
       setCategories(uniqueCategories);
+      setAvailableCoupons(couponsData || []);
     } catch (error) {
       console.error("Error loading data:", error);
       showToast('Error al cargar datos', 'error');
@@ -88,10 +99,20 @@ function App() {
     const saved = localStorage.getItem('orders');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Saved Lists State
   const [savedLists, setSavedLists] = useState(() => {
     const saved = localStorage.getItem('savedLists');
     return saved ? JSON.parse(saved) : [];
   });
+  const [isSavingList, setIsSavingList] = useState(false);
+  const [newListName, setNewListName] = useState('');
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const [showCheckout, setShowCheckout] = useState(false);
   const [flyingItem, setFlyingItem] = useState(null);
   const [sortOrder, setSortOrder] = useState(null); // null, 'asc', 'desc'
@@ -101,304 +122,23 @@ function App() {
   const [pointsToUse, setPointsToUse] = useState(0);
   const [showMap, setShowMap] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20); // Initial load count
-  const [isSavingList, setIsSavingList] = useState(false);
-  const [newListName, setNewListName] = useState('');
+
 
   // Reload data when switching to home tab to ensure freshness
   useEffect(() => {
-    if (activeTab === 'home') {
+    if (activeTab === 'home' || activeTab === 'points') {
       loadData();
     }
   }, [activeTab]);
 
-
-  // Simulate initial loading - REMOVED as we now have real async loading
-  // useEffect(() => {
-  //   const timer = setTimeout(() => setIsLoading(false), 1500);
-  //   return () => clearTimeout(timer);
-  // }, []);
-
-  // Persistence Effects
-  useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cart));
-  }, [cart]);
-
-  useEffect(() => {
-    localStorage.setItem('favorites', JSON.stringify(favorites));
-  }, [favorites]);
-
-  useEffect(() => {
-    localStorage.setItem('orders', JSON.stringify(orders));
-  }, [orders]);
-
-  useEffect(() => {
-    localStorage.setItem('savedLists', JSON.stringify(savedLists));
-  }, [savedLists]);
-
-  // Update cart items when products change (e.g. price updates from Admin)
-  useEffect(() => {
-    if (products.length > 0 && cart.length > 0) {
-      setCart(prevCart => {
-        const updatedCart = prevCart.map(cartItem => {
-          const latestProduct = products.find(p => p.id === cartItem.id);
-          if (latestProduct) {
-            // Update price and other details, keep quantity
-            return {
-              ...cartItem,
-              price: latestProduct.price,
-              name: latestProduct.name, // In case name changed
-              image: latestProduct.image,
-              originalPrice: latestProduct.originalPrice
-            };
-          }
-          return cartItem;
-        });
-
-        // Check if any changes actually happened to avoid unnecessary re-renders/saves
-        const hasChanges = JSON.stringify(updatedCart) !== JSON.stringify(prevCart);
-        return hasChanges ? updatedCart : prevCart;
-      });
-    }
-  }, [products]);
-
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-  };
-
-  const handleLogout = () => {
-    logout();
-    setOrders([]);
-    setCart([]);
-    setFavorites([]);
-    setActiveTab('home');
-    showToast('Sesión cerrada correctamente', 'info');
-  };
-
-  const addToCart = (product, event) => {
-    // Refresh product from state to ensure we have latest flags like isBulk
-    const freshProduct = products.find(p => p.id === product.id) || product;
-
-    // Check for bulk product
-    if (freshProduct.isBulk) {
-      setSelectedBulkProduct(freshProduct);
-      return;
-    }
-
-    // Trigger animation if event is provided
-    if (event) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      setFlyingItem({
-        image: product.image,
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2
-      });
-
-      // Reset flying item after animation
-      setTimeout(() => setFlyingItem(null), 800);
-    }
-
-    // Trigger cart shake animation
-    setCartAnimating(true);
-    setTimeout(() => setCartAnimating(false), 400);
-
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id && !item.isBulkSelection);
-      if (existing) {
-        showToast(`Cantidad actualizada: ${product.name} `);
-        return prev.map(item =>
-          item.id === product.id && !item.isBulkSelection ? { ...item, quantity: item.quantity + 1 } : item
-        );
-      }
-      showToast(`${product.name} agregado al carrito`);
-      return [...prev, { ...product, quantity: 1 }];
-    });
-  };
-
-  const handleBulkAddToCart = (bulkItem) => {
-    setSelectedBulkProduct(null);
-    setCartAnimating(true);
-    setTimeout(() => setCartAnimating(false), 400);
-
-    setCart(prev => {
-      // Check if same product with same bulk details exists
-      const existingIndex = prev.findIndex(item =>
-        item.id === bulkItem.id &&
-        item.isBulkSelection &&
-        item.bulkMode === bulkItem.bulkMode &&
-        item.notes === bulkItem.notes
-      );
-
-      if (existingIndex >= 0) {
-        // Update existing item
-        const newCart = [...prev];
-        const existing = newCart[existingIndex];
-
-        newCart[existingIndex] = {
-          ...existing,
-          cartQuantity: existing.cartQuantity + bulkItem.cartQuantity,
-          weight: existing.weight + bulkItem.weight,
-          totalPrice: existing.totalPrice + bulkItem.totalPrice,
-          // Recalculate unit price effectively (it stays same per unit/kg but total changes)
-          quantity: 1 // Keep quantity 1 for cart logic, we use totalPrice
-        };
-        showToast(`Cantidad actualizada: ${bulkItem.name}`);
-        return newCart;
-      }
-
-      showToast(`${bulkItem.name} agregado al carrito`);
-      return [...prev, { ...bulkItem, quantity: 1 }]; // quantity 1 because price is already total
-    });
-  };
-
-  const handleAddCombo = (combo) => {
-    setCart(prev => {
-      let newCart = [...prev];
-      combo.items.forEach(item => {
-        const existingIndex = newCart.findIndex(i => i.id === item.id);
-        if (existingIndex >= 0) {
-          newCart[existingIndex] = {
-            ...newCart[existingIndex],
-            quantity: newCart[existingIndex].quantity + item.quantity
-          };
-        } else {
-          // We need an image for the cart, use combo image as fallback if not in item
-          newCart.push({ ...item, image: combo.image });
-        }
-      });
-      return newCart;
-    });
-    setCartAnimating(true);
-    setTimeout(() => setCartAnimating(false), 400);
-    showToast(`¡Combo ${combo.name} agregado!`);
-  };
-
-  const removeFromCart = (productId, index) => {
-    // If index is provided, remove by index (safer for duplicates/bulk items)
-    if (typeof index === 'number') {
-      setCart(prev => prev.filter((_, i) => i !== index));
-    } else {
-      // Fallback for legacy calls
-      setCart(prev => prev.filter(item => item.id !== productId));
-    }
-    showToast('Producto eliminado del carrito', 'info');
-  };
-
-  const updateQuantity = (index, change) => {
-    setCart(prev => prev.map((item, i) => {
-      if (i === index) {
-        if (item.isBulkSelection) {
-          // For bulk items, we can't easily just "add 1". 
-          // Maybe we just remove if quantity goes to 0?
-          // Or we could multiply the weight/price?
-          // For simplicity, let's just allow removing.
-          if (change < 0 && item.quantity + change <= 0) return null;
-          // If user wants more, they should add again? Or we duplicate the pack?
-          // Let's just allow removing for now or duplicating the entire "pack".
-          // Actually, let's just disable quantity editing for bulk items in this simple view
-          // and only allow delete.
-          return item;
-        }
-        const newQuantity = Math.max(0, item.quantity + change);
-        return newQuantity === 0 ? null : { ...item, quantity: newQuantity };
-      }
-      return item;
-    }).filter(Boolean));
-  };
-
-  const toggleFavorite = (product) => {
-    setFavorites(prev => {
-      const exists = prev.some(item => item.id === product.id);
-      if (exists) {
-        showToast('Eliminado de favoritos', 'info');
-        return prev.filter(item => item.id !== product.id);
-      }
-      showToast('Agregado a favoritos');
-      return [...prev, product];
-    });
-  };
-
-
-
-  const handleCategoryClick = (categoryName) => {
-    setSelectedCategory(categoryName);
-    setSelectedSubcategory(null); // Reset subcategory when category changes
-    setSearchQuery('');
-    setActiveTab('home');
-    window.history.pushState({ view: 'categoria', nombre: categoryName }, '', '#categoria-' + categoryName);
-  };
-
-  const clearFilters = () => {
-    setSelectedCategory(null);
-    setSelectedSubcategory(null);
-    setSearchQuery('');
-  };
-
-  const handleScan = (product) => {
-    setIsScanning(false);
-    if (product) {
-      addToCart(product);
-      showToast(`¡${product.name} agregado al carrito!`);
-    } else {
-      showToast('Producto no encontrado', 'error');
-    }
-  };
-
-  const placeOrder = () => {
-    if (!user) {
-      showToast('Inicia sesión para continuar', 'error');
-      return;
-    }
-    if (cart.length === 0) return;
-    setShowCheckout(true);
-  };
-
-  const startSaveList = () => {
-    if (cart.length === 0) {
-      showToast('El carrito está vacío', 'error');
-      return;
-    }
-    setIsSavingList(true);
-    setNewListName('');
-  };
-
-  const confirmSaveList = () => {
-    if (!newListName.trim()) {
-      showToast('Ingresa un nombre para la lista', 'error');
-      return;
-    }
-    const newList = {
-      id: Date.now(),
-      name: newListName,
-      items: [...cart],
-      date: new Date().toLocaleDateString()
-    };
-    setSavedLists([...savedLists, newList]);
-    showToast('Lista guardada correctamente');
-    setIsSavingList(false);
-  };
-
-  const cancelSaveList = () => {
-    setIsSavingList(false);
-    setNewListName('');
-  };
-
-  const loadList = (list) => {
-    setCart([...list.items]);
-    showToast('Lista cargada al carrito');
-  };
-
-  const deleteList = (listId) => {
-    setSavedLists(savedLists.filter(l => l.id !== listId));
-    showToast('Lista eliminada');
-  };
+  // ... (rest of the file)
 
   const handleConfirmOrder = (details) => {
     const newOrder = {
       id: Math.floor(Math.random() * 1000000),
       date: new Date().toLocaleDateString(),
       items: [...cart],
-      items: [...cart],
-      total: Math.max(0, cart.reduce((acc, item) => acc + (item.isBulkSelection ? item.totalPrice : (item.price * item.quantity)), 0) - (pointsToUse * 0.1)), // 1 point = $0.10
+      total: Math.max(0, cart.reduce((acc, item) => acc + (item.isBulkSelection ? item.totalPrice : (item.price * item.quantity)), 0) - (pointsToUse * pointValue)),
       pointsUsed: pointsToUse,
       status: 'En camino'
     };
@@ -488,7 +228,7 @@ function App() {
 
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
   const cartTotal = cart.reduce((acc, item) => acc + (item.isBulkSelection ? item.totalPrice : (item.price * item.quantity)), 0);
-  const discountAmount = pointsToUse * 0.1; // 1 point = $0.10
+  const discountAmount = pointsToUse * pointValue;
   const finalTotal = Math.max(0, cartTotal - discountAmount);
 
   const totalSavings = cart.reduce((acc, item) => {
@@ -678,6 +418,141 @@ function App() {
       window.history.pushState({ section: tab }, '', `#${tab}`);
     }
   }
+
+  const addToCart = (product, quantity = 1) => {
+    setCart(prevCart => {
+      const existingItemIndex = prevCart.findIndex(item => item.id === product.id && !item.isBulkSelection);
+      if (existingItemIndex >= 0) {
+        const newCart = [...prevCart];
+        newCart[existingItemIndex] = {
+          ...newCart[existingItemIndex],
+          quantity: newCart[existingItemIndex].quantity + quantity
+        };
+        return newCart;
+      } else {
+        return [...prevCart, { ...product, quantity }];
+      }
+    });
+    setCartAnimating(true);
+    setTimeout(() => setCartAnimating(false), 300);
+    showToast(`Agregado: ${product.name}`);
+  };
+
+  const handleBulkAddToCart = (product, quantity, unit, notes, totalPrice) => {
+    const cartItem = {
+      ...product,
+      id: `${product.id}-${Date.now()}`, // Unique ID for bulk items
+      cartQuantity: quantity,
+      cartUnit: unit,
+      notes: notes,
+      totalPrice: totalPrice,
+      quantity: 1, // Treat as 1 unit in cart list
+      isBulkSelection: true,
+      name: `${product.name} (${quantity} ${unit})`
+    };
+
+    setCart(prev => [...prev, cartItem]);
+    setSelectedBulkProduct(null);
+    showToast('Producto a granel agregado');
+    setCartAnimating(true);
+    setTimeout(() => setCartAnimating(false), 300);
+  };
+
+  const handleAddCombo = (combo) => {
+    const comboItem = {
+      ...combo,
+      id: `${combo.id}-${Date.now()}`, // Unique ID
+      quantity: 1,
+      isCombo: true
+    };
+    setCart(prev => [...prev, comboItem]);
+    showToast(`Combo agregado: ${combo.name}`);
+    setCartAnimating(true);
+    setTimeout(() => setCartAnimating(false), 300);
+  };
+
+  const removeFromCart = (productId, index) => {
+    setCart(prev => prev.filter((_, i) => i !== index));
+    showToast('Producto eliminado del carrito');
+  };
+
+  const handleCategoryClick = (categoryName) => {
+    setSelectedCategory(categoryName);
+    setSelectedSubcategory(null);
+    setSearchQuery('');
+    setActiveTab('home');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const toggleFavorite = (product) => {
+    setFavorites(prev => {
+      const exists = prev.some(p => p.id === product.id);
+      let newFavorites;
+      if (exists) {
+        newFavorites = prev.filter(p => p.id !== product.id);
+        showToast('Eliminado de favoritos');
+      } else {
+        newFavorites = [...prev, product];
+        showToast('Agregado a favoritos');
+      }
+      localStorage.setItem('favorites', JSON.stringify(newFavorites));
+      return newFavorites;
+    });
+  };
+
+  // List Management Functions
+  const startSaveList = () => {
+    setIsSavingList(true);
+    setListName('');
+  };
+
+  const saveList = () => {
+    if (!listName.trim()) {
+      showToast('Ingresa un nombre para la lista', 'error');
+      return;
+    }
+
+    const newList = {
+      id: Date.now(),
+      name: listName,
+      items: cart,
+      date: new Date().toLocaleDateString()
+    };
+
+    const updatedLists = [...savedLists, newList];
+    setSavedLists(updatedLists);
+    localStorage.setItem('savedLists', JSON.stringify(updatedLists));
+
+    setIsSavingList(false);
+    showToast('Lista guardada correctamente');
+  };
+
+  const cancelSaveList = () => {
+    setIsSavingList(false);
+    setListName('');
+  };
+
+  const deleteList = (id) => {
+    const updatedLists = savedLists.filter(l => l.id !== id);
+    setSavedLists(updatedLists);
+    localStorage.setItem('savedLists', JSON.stringify(updatedLists));
+    showToast('Lista eliminada');
+  };
+
+  const loadList = (list) => {
+    if (cart.length > 0) {
+      if (!window.confirm('¿Reemplazar el carrito actual con esta lista?')) return;
+    }
+    setCart(list.items);
+    showToast('Lista cargada al carrito');
+  };
+
+  const clearFilters = () => {
+    setSelectedCategory(null);
+    setSelectedSubcategory(null);
+    setSearchQuery('');
+    setSortOrder(null);
+  };
 
   if (!isDataLoaded) {
     return <div style={{ padding: '2rem', textAlign: 'center' }}>Cargando datos...</div>;
@@ -898,8 +773,12 @@ function App() {
                       display: 'flex',
                       gap: '1rem'
                     }}>
-                      <div style={{ width: '80px', height: '80px', backgroundColor: '#f9f9f9', borderRadius: '8px', overflow: 'hidden' }}>
-                        <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      <div style={{ width: '80px', height: '80px', backgroundColor: '#f9f9f9', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        ) : (
+                          <ShoppingBasket size={32} color="#ccc" />
+                        )}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
@@ -930,7 +809,7 @@ function App() {
                         ) : (
                           <>
                             <div style={{ color: 'var(--color-primary)', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                              ${(item.price || 0).toFixed(2)}
+                              ${Number(item.price || 0).toFixed(2)}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                               <button
@@ -1034,7 +913,7 @@ function App() {
                   </div>
 
                   <button
-                    onClick={placeOrder}
+                    onClick={() => setShowCheckout(true)}
                     style={{
                       width: '100%',
                       backgroundColor: 'var(--color-secondary)',
@@ -1149,7 +1028,7 @@ function App() {
                     {user.wallet || 0} pts
                   </div>
                   <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
-                    Equivale a ${(user.wallet * 0.10).toFixed(2)} MXN
+                    Equivale a ${(user.wallet * pointValue).toFixed(2)} MXN
                   </div>
                 </div>
 
@@ -1166,59 +1045,59 @@ function App() {
                 <div style={{ marginBottom: '1.5rem' }}>
                   <h4 style={{ fontSize: '0.9rem', marginBottom: '0.75rem', color: '#666' }}>Canjea tus puntos por cupones</h4>
                   <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-                    {[
-                      { points: 500, discount: 10, code: 'DESC10' },
-                      { points: 1000, discount: 25, code: 'DESC25' },
-                      { points: 2000, discount: 50, code: 'DESC50' }
-                    ].map((coupon, idx) => (
-                      <div key={idx} style={{
-                        minWidth: '200px',
-                        backgroundColor: 'white',
-                        padding: '1rem',
-                        borderRadius: '12px',
-                        border: '1px dashed var(--color-primary)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        textAlign: 'center'
-                      }}>
-                        <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--color-primary)', marginBottom: '0.25rem' }}>
-                          ${coupon.discount} MXN
+                    {availableCoupons.filter(c => c.points > 0).length === 0 ? (
+                      <div style={{ padding: '1rem', color: '#666', fontStyle: 'italic' }}>No hay cupones canjeables disponibles en este momento.</div>
+                    ) : (
+                      availableCoupons.filter(c => c.points > 0).map((coupon, idx) => (
+                        <div key={idx} style={{
+                          minWidth: '200px',
+                          backgroundColor: 'white',
+                          padding: '1rem',
+                          borderRadius: '12px',
+                          border: '1px dashed var(--color-primary)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          textAlign: 'center'
+                        }}>
+                          <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--color-primary)', marginBottom: '0.25rem' }}>
+                            ${coupon.discount} MXN
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.75rem' }}>
+                            por {coupon.points} puntos
+                          </div>
+                          <button
+                            onClick={() => {
+                              if ((user.wallet || 0) >= coupon.points) {
+                                const updatedUser = {
+                                  ...user,
+                                  wallet: user.wallet - coupon.points,
+                                  coupons: [...(user.coupons || []), { ...coupon, id: Date.now() }]
+                                };
+                                setUser(updatedUser);
+                                localStorage.setItem('user', JSON.stringify(updatedUser));
+                                showToast(`¡Cupón de $${coupon.discount} canjeado!`);
+                              } else {
+                                showToast('Puntos insuficientes', 'error');
+                              }
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '0.5rem',
+                              backgroundColor: (user.wallet || 0) >= coupon.points ? 'var(--color-primary)' : '#ccc',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              cursor: (user.wallet || 0) >= coupon.points ? 'pointer' : 'not-allowed',
+                              fontSize: '0.9rem',
+                              fontWeight: '600'
+                            }}
+                          >
+                            Canjear
+                          </button>
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.75rem' }}>
-                          por {coupon.points} puntos
-                        </div>
-                        <button
-                          onClick={() => {
-                            if ((user.wallet || 0) >= coupon.points) {
-                              const updatedUser = {
-                                ...user,
-                                wallet: user.wallet - coupon.points,
-                                coupons: [...(user.coupons || []), { ...coupon, id: Date.now() }]
-                              };
-                              setUser(updatedUser);
-                              localStorage.setItem('user', JSON.stringify(updatedUser));
-                              showToast(`¡Cupón de $${coupon.discount} canjeado!`);
-                            } else {
-                              showToast('Puntos insuficientes', 'error');
-                            }
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '0.5rem',
-                            backgroundColor: (user.wallet || 0) >= coupon.points ? 'var(--color-primary)' : '#ccc',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '8px',
-                            cursor: (user.wallet || 0) >= coupon.points ? 'pointer' : 'not-allowed',
-                            fontSize: '0.9rem',
-                            fontWeight: '600'
-                          }}
-                        >
-                          Canjear
-                        </button>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
 

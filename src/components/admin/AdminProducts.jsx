@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 import { ProductForm } from './ProductForm';
 import { TableSkeleton } from '../common/Skeleton';
 import { EmptyState } from '../common/EmptyState';
+import { ConfirmationModal } from '../ConfirmationModal';
 
 export function AdminProducts() {
     const [products, setProducts] = useState([]);
@@ -18,6 +19,17 @@ export function AdminProducts() {
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
+
+    // Confirmation Modal State
+    const [modalConfig, setModalConfig] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        isDanger: false,
+        confirmText: 'Confirmar',
+        cancelText: 'Cancelar'
+    });
 
     // Client-Side Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -35,7 +47,7 @@ export function AdminProducts() {
 
     const loadCategories = async () => {
         const cats = await api.products.getCategories();
-        setCategories(cats);
+        setCategories(cats.map(c => ({ ...c, id: String(c.id) })));
     };
 
     const loadProducts = async () => {
@@ -44,7 +56,8 @@ export function AdminProducts() {
             const allProducts = await api.products.getAll();
             // Sort by creation date desc
             allProducts.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-            setProducts(allProducts);
+            // Ensure IDs are strings
+            setProducts(allProducts.map(p => ({ ...p, id: String(p.id) })));
         } catch (error) {
             console.error("Error loading products:", error);
             alert("Error al cargar productos.");
@@ -63,17 +76,28 @@ export function AdminProducts() {
         setIsModalOpen(true);
     };
 
-    const handleDelete = async (id) => {
-        if (window.confirm('¿Estás seguro de eliminar este producto?')) {
-            await api.products.delete(id);
-            loadProducts(); // Reload to refresh list
+    const handleDelete = (id, e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
         }
+        setModalConfig({
+            isOpen: true,
+            title: '¿Eliminar producto?',
+            message: '¿Estás seguro de eliminar este producto? Esta acción no se puede deshacer.',
+            isDanger: true,
+            confirmText: 'Sí, eliminar',
+            onConfirm: async () => {
+                await api.products.delete(id);
+                loadProducts();
+            }
+        });
     };
 
     const handleSave = async (productData) => {
         try {
             if (editingProduct) {
-                await api.products.update(editingProduct.id, productData);
+                await api.products.update(String(editingProduct.id), productData);
             } else {
                 await api.products.add(productData);
             }
@@ -95,7 +119,7 @@ export function AdminProducts() {
         }
 
         if (selectedCategory) {
-            filtered = filtered.filter(p => p.category === selectedCategory || p.category === Number(selectedCategory));
+            filtered = filtered.filter(p => String(p.category) === String(selectedCategory));
         }
 
         if (stockFilter !== 'all') {
@@ -119,27 +143,55 @@ export function AdminProducts() {
 
     return (
         <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+            <ConfirmationModal
+                isOpen={modalConfig.isOpen}
+                onClose={() => setModalConfig({ ...modalConfig, isOpen: false })}
+                onConfirm={modalConfig.onConfirm}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                isDanger={modalConfig.isDanger}
+                confirmText={modalConfig.confirmText}
+                cancelText={modalConfig.cancelText}
+            />
+
             {/* Header */}
             <div style={{ padding: '1.5rem', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                 <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827' }}>Productos</h2>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <button
-                        onClick={async () => {
-                            if (window.confirm('⚠️ ¿ESTÁS SEGURO? Esto eliminará TODOS los productos (el inventario) pero MANTENDRÁ las categorías.')) {
-                                if (window.confirm('¿De verdad? Esta acción no se puede deshacer.')) {
-                                    setLoading(true);
-                                    try {
-                                        await api.products.deleteAllProducts();
-                                        alert('Inventario limpiado correctamente. Las categorías se han conservado.');
-                                        loadProducts();
-                                    } catch (error) {
-                                        console.error(error);
-                                        alert('Error al limpiar productos');
-                                    } finally {
-                                        setLoading(false);
-                                    }
+                        onClick={() => {
+                            setModalConfig({
+                                isOpen: true,
+                                title: '⚠️ ELIMINAR TODO EL INVENTARIO',
+                                message: 'Esto eliminará TODOS los productos permanentemente. Las categorías se mantendrán. ¿Estás seguro?',
+                                isDanger: true,
+                                confirmText: 'SÍ, ELIMINAR TODO',
+                                onConfirm: () => {
+                                    // Timeout to allow the first modal to close properly before opening the second one
+                                    setTimeout(() => {
+                                        setModalConfig({
+                                            isOpen: true,
+                                            title: '¿DE VERDAD?',
+                                            message: 'Esta es tu última oportunidad. Esta acción es IRREVERSIBLE.',
+                                            isDanger: true,
+                                            confirmText: 'ESTOY SEGURO',
+                                            onConfirm: async () => {
+                                                setLoading(true);
+                                                try {
+                                                    await api.products.deleteAllProducts();
+                                                    alert('Inventario limpiado correctamente.');
+                                                    loadProducts();
+                                                } catch (error) {
+                                                    console.error(error);
+                                                    alert('Error al limpiar productos');
+                                                } finally {
+                                                    setLoading(false);
+                                                }
+                                            }
+                                        });
+                                    }, 200);
                                 }
-                            }
+                            });
                         }}
                         style={{
                             display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem',
@@ -187,8 +239,8 @@ export function AdminProducts() {
                     }}
                 >
                     <option value="">Todas las Categorías</option>
-                    {[...new Map(categories.map(item => [item.id, item])).values()].map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    {[...new Map(categories.map(item => [String(item.id), item])).values()].map(cat => (
+                        <option key={String(cat.id)} value={String(cat.id)}>{cat.name}</option>
                     ))}
                 </select>
 
@@ -254,7 +306,7 @@ export function AdminProducts() {
                                                 )}
                                             </div>
                                             <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                                                {categories.find(c => c.id === product.category)?.name || product.category}
+                                                {categories.find(c => String(c.id) === String(product.category))?.name || product.category}
                                             </div>
                                         </div>
                                     </td>
@@ -279,14 +331,17 @@ export function AdminProducts() {
                                     <td style={{ padding: '1rem' }}>
                                         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                                             <button
-                                                onClick={() => handleEdit(product)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleEdit(product);
+                                                }}
                                                 style={{ padding: '0.5rem', color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer' }}
                                                 title="Editar"
                                             >
                                                 <Edit size={18} />
                                             </button>
                                             <button
-                                                onClick={() => handleDelete(product.id)}
+                                                onClick={(e) => handleDelete(product.id, e)}
                                                 style={{ padding: '0.5rem', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
                                                 title="Eliminar"
                                             >

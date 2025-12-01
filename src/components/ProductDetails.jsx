@@ -84,7 +84,8 @@ export function ProductDetails({ product, products, onClose, onAdd, isFavorite, 
             {/* Product Image */}
             <div style={{
                 width: '100%',
-                height: '40vh',
+                minHeight: '300px',
+                maxHeight: '50vh',
                 backgroundColor: '#f5f5f5',
                 display: 'flex',
                 alignItems: 'center',
@@ -113,12 +114,18 @@ export function ProductDetails({ product, products, onClose, onAdd, isFavorite, 
                     </div>
                 )}
                 <img
-                    src={product.image}
+                    src={product.image || 'https://via.placeholder.com/300?text=No+Image'}
                     alt={product.name}
+                    onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://via.placeholder.com/300?text=Error+Loading';
+                    }}
                     style={{
                         maxWidth: '100%',
                         maxHeight: '100%',
-                        objectFit: 'contain'
+                        objectFit: 'contain',
+                        width: 'auto',
+                        height: 'auto'
                     }}
                 />
             </div>

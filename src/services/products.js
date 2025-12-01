@@ -89,32 +89,61 @@ export const ProductService = {
   },
 
   getAllCategories: async () => {
-    if (!USE_FIREBASE) return localCategories;
+    if (!USE_FIREBASE) return localCategories.map(c => ({ ...c, id: String(c.id) }));
     try {
       const querySnapshot = await getDocs(collection(db, "categories"));
       if (querySnapshot.empty) {
         // Auto-seed if empty so we have deletable documents
         console.log("Auto-seeding categories to Firestore...");
         const seededCategories = [];
-        const categoriesRef = collection(db, "categories");
 
         for (const cat of localCategories) {
           try {
-            const docRef = await addDoc(categoriesRef, cat);
-            seededCategories.push({ id: docRef.id, ...cat });
+            // Use setDoc to preserve the ID from local data (e.g., "1", "2")
+            const docRef = doc(db, "categories", String(cat.id));
+            await setDoc(docRef, cat);
+            seededCategories.push({ ...cat, id: String(cat.id) });
           } catch (e) {
             console.error("Error seeding category:", e);
           }
         }
-        return seededCategories.length > 0 ? seededCategories : localCategories;
+        return seededCategories.length > 0 ? seededCategories : localCategories.map(c => ({ ...c, id: String(c.id) }));
       }
       return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        id: String(doc.id) // IMPORTANT: Put this LAST to ensure we use the document key as the ID
       }));
     } catch (error) {
       console.error("Error fetching categories:", error);
-      return localCategories;
+      return localCategories.map(c => ({ ...c, id: String(c.id) }));
+    }
+  },
+
+  reseedCategories: async () => {
+    try {
+      console.log("Starting full category reseed...");
+      const categoriesRef = collection(db, "categories");
+      const snapshot = await getDocs(categoriesRef);
+
+      // Delete ALL existing categories to ensure a clean slate
+      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+      console.log("Cleared existing categories.");
+
+      // Seed new categories from local data
+      const seededCategories = [];
+      for (const cat of localCategories) {
+        // Force the document key to be the category ID (e.g., "1", "2")
+        const docRef = doc(db, "categories", String(cat.id));
+        const catData = { ...cat, id: String(cat.id) }; // Ensure ID in data matches key
+        await setDoc(docRef, catData);
+        seededCategories.push(catData);
+      }
+      console.log("Reseed complete.");
+      return seededCategories;
+    } catch (error) {
+      console.error("Error reseeding categories:", error);
+      throw error;
     }
   },
 
@@ -131,7 +160,9 @@ export const ProductService = {
   updateCategory: async (id, categoryData) => {
     try {
       const categoryRef = doc(db, "categories", String(id));
-      await updateDoc(categoryRef, categoryData);
+      // Use setDoc with merge: true to handle cases where the document might not exist
+      // This acts as an "upsert" which fixes the "No document to update" error
+      await setDoc(categoryRef, categoryData, { merge: true });
       return { id, ...categoryData };
     } catch (error) {
       console.error("Error updating category:", error);
@@ -249,31 +280,79 @@ export const ProductService = {
       if (snapshot.empty) return 0;
 
       const categoriesByName = {};
-      const duplicatesToDelete = [];
+      let deletedCount = 0;
 
+      // Group by name
       snapshot.docs.forEach(doc => {
         const data = doc.data();
-        // Handle potential missing name
-        const name = data.name ? data.name.trim().toLowerCase() : '';
-
-        if (name && categoriesByName[name]) {
-          // Found a duplicate, mark for deletion
-          duplicatesToDelete.push(doc.ref);
-        } else if (name) {
-          // First time seeing this name, keep it
-          categoriesByName[name] = true;
+        const name = data.name ? data.name.trim().toLowerCase() : 'unnamed';
+        if (!categoriesByName[name]) {
+          categoriesByName[name] = [];
         }
+        categoriesByName[name].push({ ref: doc.ref, id: doc.id, ...data });
       });
 
-      if (duplicatesToDelete.length > 0) {
-        console.log(`Found ${duplicatesToDelete.length} duplicate categories. Deleting...`);
-        await Promise.all(duplicatesToDelete.map(ref => deleteDoc(ref)));
+      // Process duplicates
+      for (const name in categoriesByName) {
+        const group = categoriesByName[name];
+        if (group.length > 1) {
+          console.log(`Found duplicates for "${name}":`, group);
+
+          // Sort to find the "keeper". Prefer simple numeric IDs (length 1 or 2) or the one with "1"
+          group.sort((a, b) => {
+            const aIsSimple = a.id.length <= 2;
+            const bIsSimple = b.id.length <= 2;
+            if (aIsSimple && !bIsSimple) return -1; // a comes first (keep a)
+            if (!aIsSimple && bIsSimple) return 1;  // b comes first (keep b)
+            return a.id.localeCompare(b.id); // Default to alphanumeric sort
+          });
+
+          const keeper = group[0];
+          const duplicates = group.slice(1);
+
+          console.log(`Keeping: ${keeper.id}, Deleting: ${duplicates.map(d => d.id).join(', ')}`);
+
+          // Delete duplicates
+          const deletePromises = duplicates.map(d => deleteDoc(d.ref));
+          await Promise.all(deletePromises);
+          deletedCount += duplicates.length;
+        }
       }
 
-      return duplicatesToDelete.length;
+      return deletedCount;
     } catch (error) {
       console.error("Error removing duplicate categories:", error);
       throw error;
+    }
+  },
+
+  checkCategoryUsage: async (categoryName, subcategoryName = null) => {
+    try {
+      const productsRef = collection(db, "products");
+      let q;
+
+      if (subcategoryName) {
+        // Check for specific subcategory usage
+        q = query(
+          productsRef,
+          where('category', '==', categoryName),
+          where('subcategory', '==', subcategoryName),
+          limit(1)
+        );
+      } else {
+        // Check for general category usage
+        q = query(
+          productsRef,
+          where('category', '==', categoryName),
+          limit(1)
+        );
+      }
+
+      const snapshot = await getDocs(q);
+      return !snapshot.empty;
+    } catch (error) {
+      console.error("Error checking category usage:", error);
+      return false; // Assume not used in case of error to avoid blocking, or handle differently
     }
   }
 };

@@ -5,54 +5,16 @@ export function CombosGrid({ onAddCombo, onBack }) {
     const [combos, setCombos] = React.useState([]);
 
     React.useEffect(() => {
-        const storedCombos = JSON.parse(localStorage.getItem('combos') || '[]');
-        if (storedCombos.length > 0) {
-            setCombos(storedCombos);
-        } else {
-            // Fallback to defaults if empty (same as ComboSection)
-            const defaultCombos = [
-                {
-                    id: 'combo-1',
-                    name: 'Pack Desayuno',
-                    description: 'Cereal + Leche + Café',
-                    price: 85.00,
-                    originalPrice: 110.00,
-                    image: 'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?auto=format&fit=crop&w=300&q=80',
-                    items: [
-                        { id: 'c-1-1', name: 'Cereal Maíz', price: 35, quantity: 1 },
-                        { id: 'c-1-2', name: 'Leche Entera', price: 25, quantity: 1 },
-                        { id: 'c-1-3', name: 'Café Soluble', price: 50, quantity: 1 }
-                    ]
-                },
-                {
-                    id: 'combo-2',
-                    name: 'Pack Limpieza',
-                    description: 'Detergente + Suavizante + Cloro',
-                    price: 120.00,
-                    originalPrice: 155.00,
-                    image: 'https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&w=300&q=80',
-                    items: [
-                        { id: 'c-2-1', name: 'Detergente 1kg', price: 45, quantity: 1 },
-                        { id: 'c-2-2', name: 'Suavizante 1L', price: 35, quantity: 1 },
-                        { id: 'c-2-3', name: 'Cloro 2L', price: 20, quantity: 1 }
-                    ]
-                },
-                {
-                    id: 'combo-3',
-                    name: 'Pack Fiesta',
-                    description: 'Refrescos + Papas + Vasos',
-                    price: 150.00,
-                    originalPrice: 190.00,
-                    image: 'https://images.unsplash.com/photo-1530103862676-de3c9a59af38?auto=format&fit=crop&w=300&q=80',
-                    items: [
-                        { id: 'c-3-1', name: 'Refresco Cola 3L', price: 40, quantity: 2 },
-                        { id: 'c-3-2', name: 'Papas Fritas', price: 45, quantity: 2 },
-                        { id: 'c-3-3', name: 'Vasos Desechables', price: 20, quantity: 1 }
-                    ]
-                }
-            ];
-            setCombos(defaultCombos);
-        }
+        const loadCombos = async () => {
+            try {
+                const { ContentService } = await import('../services/content');
+                const combosData = await ContentService.getCombos();
+                setCombos(combosData);
+            } catch (error) {
+                console.error("Error loading combos:", error);
+            }
+        };
+        loadCombos();
     }, []);
 
     return (

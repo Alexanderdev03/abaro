@@ -253,6 +253,17 @@ export function AdminSettings() {
                                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #d1d5db' }}
                             />
                         </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem' }}>Valor del Punto ($ MXN)</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={settings.pointValue || 0.10}
+                                onChange={(e) => handleChange('pointValue', parseFloat(e.target.value))}
+                                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #d1d5db' }}
+                            />
+                            <small style={{ color: '#6b7280' }}>Ej: 0.10 significa que 10 puntos = $1.00</small>
+                        </div>
                     </div>
 
                     <div style={{ display: 'grid', gap: '1rem' }}>

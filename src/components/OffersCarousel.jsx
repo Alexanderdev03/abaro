@@ -115,6 +115,11 @@ export function OffersCarousel() {
                                 <h2 style={{ fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
                                     {offer.title}
                                 </h2>
+                                {offer.subtitle && (
+                                    <p style={{ fontSize: '1.1rem', opacity: 0.9, textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                                        {offer.subtitle}
+                                    </p>
+                                )}
                             </div>
                         </>
                     ) : (

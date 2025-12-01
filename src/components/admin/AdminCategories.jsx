@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, ChevronRight, FolderPlus, List } from 'lucide-react';
 import { ProductService } from '../../services/products';
+import { ConfirmationModal } from '../ConfirmationModal';
 
 export function AdminCategories() {
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingCategory, setEditingCategory] = useState(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
+
+    // Modal State
+    const [modalConfig, setModalConfig] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        isDanger: false,
+        confirmText: 'Confirmar'
+    });
 
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -17,7 +28,8 @@ export function AdminCategories() {
     const loadCategories = async () => {
         setLoading(true);
         const data = await ProductService.getAllCategories();
-        setCategories(data);
+        // Enforce string IDs for consistency
+        setCategories(data.map(c => ({ ...c, id: String(c.id) })));
         setLoading(false);
     };
 
@@ -27,25 +39,118 @@ export function AdminCategories() {
     );
 
     const handleSave = async (categoryData) => {
-        if (editingCategory) {
-            await ProductService.updateCategory(editingCategory.id, categoryData);
-        } else {
-            await ProductService.addCategory(categoryData);
+        try {
+            if (editingCategory) {
+                await ProductService.updateCategory(String(editingCategory.id), categoryData);
+            } else {
+                await ProductService.addCategory(categoryData);
+            }
+            await loadCategories(); // Wait for reload
+            setIsFormOpen(false);
+            setEditingCategory(null);
+        } catch (error) {
+            console.error("Error saving category:", error);
+            alert("Error al guardar la categoría. Revisa la consola para más detalles.");
         }
-        loadCategories();
-        setIsFormOpen(false);
-        setEditingCategory(null);
     };
 
-    const handleDelete = async (id) => {
-        if (window.confirm('¿Estás seguro de eliminar esta categoría?')) {
-            await ProductService.deleteCategory(id);
-            loadCategories();
+    const handleDelete = async (id, e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
         }
+
+        const category = categories.find(c => String(c.id) === String(id));
+        if (!category) return;
+
+        // 1. Check for subcategories
+        if (category.subcategories && category.subcategories.length > 0) {
+            setModalConfig({
+                isOpen: true,
+                title: 'No se puede eliminar',
+                message: `La categoría "${category.name}" tiene ${category.subcategories.length} subcategorías. Debes eliminarlas primero.`,
+                onConfirm: () => { },
+                isDanger: false,
+                confirmText: 'Entendido',
+                cancelText: 'Cerrar'
+            });
+            return;
+        }
+
+        // 2. Check for duplicates (Sibling check)
+        const siblingCategory = categories.find(c =>
+            c.name.trim().toLowerCase() === category.name.trim().toLowerCase() &&
+            String(c.id) !== String(id)
+        );
+
+        if (siblingCategory) {
+            setModalConfig({
+                isOpen: true,
+                title: 'Eliminar duplicado',
+                message: `Existe otra categoría llamada "${category.name}". ¿Quieres eliminar esta versión (ID: ${id})?`,
+                isDanger: true,
+                confirmText: 'Eliminar',
+                onConfirm: async () => {
+                    try {
+                        await ProductService.deleteCategory(String(id));
+                        loadCategories();
+                    } catch (error) {
+                        console.error("Error deleting duplicate:", error);
+                    }
+                }
+            });
+            return;
+        }
+
+        // 3. Check for usage
+        try {
+            const isUsed = await ProductService.checkCategoryUsage(category.name);
+
+            if (isUsed) {
+                setModalConfig({
+                    isOpen: true,
+                    title: 'No se puede eliminar',
+                    message: `La categoría "${category.name}" está siendo usada por productos. Reasigna o elimina los productos primero.`,
+                    onConfirm: () => { },
+                    isDanger: false,
+                    confirmText: 'Entendido'
+                });
+                return;
+            }
+
+            setModalConfig({
+                isOpen: true,
+                title: '¿Eliminar categoría?',
+                message: `¿Estás seguro de eliminar "${category.name}"? Esta acción no se puede deshacer.`,
+                isDanger: true,
+                confirmText: 'Sí, eliminar',
+                onConfirm: async () => {
+                    await ProductService.deleteCategory(String(id));
+                    loadCategories();
+                }
+            });
+        } catch (error) {
+            console.error("Error checking/deleting category:", error);
+        }
+    };
+
+    const checkSubcategoryUsage = async (categoryName, subcategoryName) => {
+        return await ProductService.checkCategoryUsage(categoryName, subcategoryName);
     };
 
     return (
         <div>
+            <ConfirmationModal
+                isOpen={modalConfig.isOpen}
+                onClose={() => setModalConfig({ ...modalConfig, isOpen: false })}
+                onConfirm={modalConfig.onConfirm}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                isDanger={modalConfig.isDanger}
+                confirmText={modalConfig.confirmText}
+                cancelText={modalConfig.cancelText}
+            />
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <div>
                     <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#111827' }}>Gestión de Categorías</h2>
@@ -54,17 +159,24 @@ export function AdminCategories() {
                 <div style={{ display: 'flex', gap: '1rem' }}>
                     <button
                         onClick={async () => {
-                            if (window.confirm('¿Deseas buscar y eliminar categorías duplicadas?')) {
-                                setLoading(true);
-                                try {
-                                    const count = await ProductService.removeDuplicateCategories();
-                                    alert(`Se eliminaron ${count} categorías duplicadas.`);
-                                    loadCategories();
-                                } catch (error) {
-                                    alert('Error al eliminar duplicados');
+                            setModalConfig({
+                                isOpen: true,
+                                title: 'Limpiar Duplicados',
+                                message: '¿Deseas buscar y eliminar categorías duplicadas?',
+                                isDanger: true,
+                                confirmText: 'Limpiar',
+                                onConfirm: async () => {
+                                    setLoading(true);
+                                    try {
+                                        const count = await ProductService.removeDuplicateCategories();
+                                        alert(count > 0 ? `Se eliminaron ${count} duplicados.` : 'No se encontraron duplicados.');
+                                        loadCategories();
+                                    } catch (error) {
+                                        console.error("Error removing duplicates:", error);
+                                    }
+                                    setLoading(false);
                                 }
-                                setLoading(false);
-                            }
+                            });
                         }}
                         style={{
                             backgroundColor: '#ef4444', color: 'white', border: 'none',
@@ -75,6 +187,36 @@ export function AdminCategories() {
                     >
                         <Trash2 size={20} />
                         Limpiar Duplicados
+                    </button>
+                    <button
+                        onClick={async () => {
+                            setModalConfig({
+                                isOpen: true,
+                                title: 'Restaurar Categorías',
+                                message: '¿Restaurar las categorías originales? Esto borrará las actuales.',
+                                isDanger: true,
+                                confirmText: 'Restaurar',
+                                onConfirm: async () => {
+                                    setLoading(true);
+                                    try {
+                                        await ProductService.reseedCategories();
+                                        loadCategories();
+                                    } catch (error) {
+                                        console.error(error);
+                                    }
+                                    setLoading(false);
+                                }
+                            });
+                        }}
+                        style={{
+                            backgroundColor: '#f59e0b', color: 'white', border: 'none',
+                            padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
+                            boxShadow: '0 2px 5px rgba(245, 158, 11, 0.3)'
+                        }}
+                    >
+                        <FolderPlus size={20} />
+                        Restaurar
                     </button>
                     <button
                         onClick={() => { setEditingCategory(null); setIsFormOpen(true); }}
@@ -109,7 +251,7 @@ export function AdminCategories() {
                 <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>Cargando categorías...</div>
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                    {filteredCategories.map(category => (
+                    {[...new Map(filteredCategories.map(item => [String(item.id), item])).values()].map(category => (
                         <div key={category.id} style={{
                             backgroundColor: 'white', borderRadius: '12px', padding: '1.5rem',
                             boxShadow: '0 1px 3px rgba(0,0,0,0.1)', border: `1px solid ${category.color || '#e5e7eb'}`
@@ -138,7 +280,7 @@ export function AdminCategories() {
                                         <Edit2 size={18} />
                                     </button>
                                     <button
-                                        onClick={() => handleDelete(category.id)}
+                                        onClick={(e) => handleDelete(category.id, e)}
                                         style={{ padding: '0.5rem', borderRadius: '6px', border: 'none', background: '#fef2f2', cursor: 'pointer', color: '#ef4444' }}
                                     >
                                         <Trash2 size={18} />
@@ -167,13 +309,14 @@ export function AdminCategories() {
                     category={editingCategory}
                     onClose={() => setIsFormOpen(false)}
                     onSave={handleSave}
+                    checkSubcategoryUsage={checkSubcategoryUsage}
                 />
             )}
         </div>
     );
 }
 
-function CategoryForm({ category, onClose, onSave }) {
+function CategoryForm({ category, onClose, onSave, checkSubcategoryUsage }) {
     const [formData, setFormData] = useState({
         name: '',
         color: '#e3f2fd',
@@ -191,9 +334,21 @@ function CategoryForm({ category, onClose, onSave }) {
         }
     }, [category]);
 
-    const handleSubmit = (e) => {
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        onSave(formData);
+        e.stopPropagation();
+        setIsSaving(true);
+        console.log("Saving category data:", formData);
+        try {
+            await onSave(formData);
+        } catch (error) {
+            console.error("Error in handleSubmit:", error);
+            alert("Error al guardar desde el formulario.");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const addSubcategory = () => {
@@ -206,7 +361,24 @@ function CategoryForm({ category, onClose, onSave }) {
         }
     };
 
-    const removeSubcategory = (index) => {
+    const removeSubcategory = async (index) => {
+        const subToRemove = formData.subcategories[index];
+
+        // Only check usage if we are editing an existing category and the subcategory was already there
+        if (category && category.subcategories && category.subcategories.includes(subToRemove)) {
+            try {
+                const isUsed = await checkSubcategoryUsage(category.name, subToRemove);
+                if (isUsed) {
+                    alert(`No se puede eliminar la subcategoría "${subToRemove}" porque está en uso por uno o más productos. Cambia la categoría de esos productos primero.`);
+                    return;
+                }
+            } catch (error) {
+                console.error("Error checking subcategory usage:", error);
+                alert("Error al verificar uso de subcategoría. Intenta de nuevo.");
+                return;
+            }
+        }
+
         const updated = formData.subcategories.filter((_, i) => i !== index);
         setFormData({ ...formData, subcategories: updated });
     };
@@ -312,24 +484,26 @@ function CategoryForm({ category, onClose, onSave }) {
                         <button
                             type="button"
                             onClick={onClose}
-                            style={{ padding: '0.75rem 1.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: 'pointer' }}
+                            disabled={isSaving}
+                            style={{ padding: '0.75rem 1.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: 'white', cursor: 'pointer', opacity: isSaving ? 0.5 : 1 }}
                         >
                             Cancelar
                         </button>
                         <button
                             type="submit"
+                            disabled={isSaving}
                             style={{
                                 padding: '0.75rem 1.5rem', borderRadius: '6px', border: 'none',
-                                backgroundColor: '#3b82f6', color: 'white', fontWeight: '600', cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', gap: '0.5rem'
+                                backgroundColor: '#3b82f6', color: 'white', fontWeight: '600', cursor: isSaving ? 'not-allowed' : 'pointer',
+                                display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isSaving ? 0.7 : 1
                             }}
                         >
                             <Save size={18} />
-                            Guardar
+                            {isSaving ? 'Guardando...' : 'Guardar'}
                         </button>
                     </div>
-                </form>
-            </div>
-        </div>
+                </form >
+            </div >
+        </div >
     );
 }

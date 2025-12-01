@@ -1,17 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Tag, Zap, Trash2, Plus, Edit } from 'lucide-react';
 import { ProductService } from '../../services/products';
+import { ConfirmationModal } from '../ConfirmationModal';
 
 export function AdminPromotions() {
     const [products, setProducts] = useState([]);
     const [flashSaleId, setFlashSaleId] = useState(localStorage.getItem('flashSaleId') || '');
-    const [coupons, setCoupons] = useState(() => JSON.parse(localStorage.getItem('adminCoupons') || '[]'));
+    const [coupons, setCoupons] = useState([]);
     const [newCoupon, setNewCoupon] = useState({ code: '', discount: '', points: '' });
     const [editingCoupon, setEditingCoupon] = useState(null);
 
+    // Confirmation Modal State
+    const [modalConfig, setModalConfig] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        isDanger: false,
+        confirmText: 'Confirmar',
+        cancelText: 'Cancelar'
+    });
+
     useEffect(() => {
-        ProductService.getAllProducts().then(setProducts);
+        loadData();
     }, []);
+
+    const loadData = async () => {
+        try {
+            const prods = await ProductService.getAllProducts();
+            setProducts(prods.map(p => ({ ...p, id: String(p.id) })));
+
+            const { ContentService } = await import('../../services/content');
+            const couponsData = await ContentService.getCoupons();
+            setCoupons(couponsData);
+        } catch (error) {
+            console.error("Error loading data:", error);
+        }
+    };
 
     const handleSaveFlashSale = () => {
         localStorage.setItem('flashSaleId', flashSaleId);
@@ -20,31 +45,36 @@ export function AdminPromotions() {
         alert('Oferta relámpago actualizada');
     };
 
-    const handleAddCoupon = (e) => {
+    const handleAddCoupon = async (e) => {
         e.preventDefault();
         if (!newCoupon.code || !newCoupon.discount) return;
 
-        let updated;
-        if (editingCoupon) {
-            updated = coupons.map(c => c.id === editingCoupon.id ? {
-                ...editingCoupon,
+        try {
+            const { ContentService } = await import('../../services/content');
+            const couponData = {
                 code: newCoupon.code,
                 discount: Number(newCoupon.discount),
                 points: Number(newCoupon.points) || 0
-            } : c);
-            setEditingCoupon(null);
-        } else {
-            updated = [...coupons, {
-                ...newCoupon,
-                id: Date.now(),
-                discount: Number(newCoupon.discount),
-                points: Number(newCoupon.points) || 0
-            }];
-        }
+            };
 
-        setCoupons(updated);
-        localStorage.setItem('adminCoupons', JSON.stringify(updated));
-        setNewCoupon({ code: '', discount: '', points: '' });
+            if (editingCoupon) {
+                await ContentService.updateCoupon(editingCoupon.id, couponData);
+                setEditingCoupon(null);
+                alert('Cupón actualizado correctamente');
+            } else {
+                await ContentService.addCoupon({
+                    ...couponData,
+                    createdAt: new Date().toISOString()
+                });
+                alert('Cupón agregado correctamente');
+            }
+
+            loadData();
+            setNewCoupon({ code: '', discount: '', points: '' });
+        } catch (error) {
+            console.error(error);
+            alert('Error al guardar el cupón');
+        }
     };
 
     const handleEditCoupon = (coupon) => {
@@ -61,19 +91,45 @@ export function AdminPromotions() {
         setNewCoupon({ code: '', discount: '', points: '' });
     };
 
-    const handleDeleteCoupon = (id) => {
-        if (window.confirm('¿Estás seguro de eliminar este cupón?')) {
-            const updated = coupons.filter(c => c.id !== id);
-            setCoupons(updated);
-            localStorage.setItem('adminCoupons', JSON.stringify(updated));
-            if (editingCoupon && editingCoupon.id === id) {
-                handleCancelEdit();
-            }
+    const handleDeleteCoupon = (id, e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
         }
+        setModalConfig({
+            isOpen: true,
+            title: '¿Eliminar cupón?',
+            message: '¿Estás seguro de eliminar este cupón? Esta acción no se puede deshacer.',
+            isDanger: true,
+            confirmText: 'Sí, eliminar',
+            onConfirm: async () => {
+                try {
+                    const { ContentService } = await import('../../services/content');
+                    await ContentService.deleteCoupon(id);
+                    loadData();
+                    if (editingCoupon && editingCoupon.id === id) {
+                        handleCancelEdit();
+                    }
+                } catch (error) {
+                    alert('Error al eliminar el cupón');
+                }
+            }
+        });
     };
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            <ConfirmationModal
+                isOpen={modalConfig.isOpen}
+                onClose={() => setModalConfig({ ...modalConfig, isOpen: false })}
+                onConfirm={modalConfig.onConfirm}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                isDanger={modalConfig.isDanger}
+                confirmText={modalConfig.confirmText}
+                cancelText={modalConfig.cancelText}
+            />
+
             {/* Flash Sale Section */}
             <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                 <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -202,14 +258,17 @@ export function AdminPromotions() {
                                         <td style={{ padding: '1rem', textAlign: 'right' }}>
                                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
                                                 <button
-                                                    onClick={() => handleEditCoupon(coupon)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEditCoupon(coupon);
+                                                    }}
                                                     style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}
                                                     title="Editar"
                                                 >
                                                     <Edit size={18} />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDeleteCoupon(coupon.id)}
+                                                    onClick={(e) => handleDeleteCoupon(coupon.id, e)}
                                                     style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
                                                     title="Eliminar"
                                                 >

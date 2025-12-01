@@ -1,12 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, X, Search } from 'lucide-react';
 import { ProductService } from '../../services/products';
+import { ConfirmationModal } from '../ConfirmationModal';
 
 export function AdminCombos() {
     const [combos, setCombos] = useState([]);
     const [products, setProducts] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCombo, setEditingCombo] = useState(null);
+
+    // Confirmation Modal State
+    const [modalConfig, setModalConfig] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        isDanger: false,
+        confirmText: 'Confirmar',
+        cancelText: 'Cancelar'
+    });
 
     // Form State
     const [formData, setFormData] = useState({
@@ -27,10 +39,17 @@ export function AdminCombos() {
     }, []);
 
     const loadData = async () => {
-        const storedCombos = JSON.parse(localStorage.getItem('combos') || '[]');
-        setCombos(storedCombos);
-        const allProducts = await ProductService.getAllProducts();
-        setProducts(allProducts);
+        try {
+            const { ContentService } = await import('../../services/content');
+            const [combosData, allProducts] = await Promise.all([
+                ContentService.getCombos(),
+                ProductService.getAllProducts()
+            ]);
+            setCombos(combosData);
+            setProducts(allProducts.map(p => ({ ...p, id: String(p.id) })));
+        } catch (error) {
+            console.error("Error loading data:", error);
+        }
     };
 
     const handleOpenModal = (combo = null) => {
@@ -52,9 +71,20 @@ export function AdminCombos() {
     };
 
     const handleAddItem = () => {
-        if (!selectedProduct) return;
-        const product = products.find(p => p.id === parseInt(selectedProduct));
-        if (!product) return;
+        console.log("Adding item, selectedProduct:", selectedProduct);
+        if (!selectedProduct) {
+            alert("Por favor selecciona un producto primero");
+            return;
+        }
+
+        // Try strict string matching first, then loose
+        const product = products.find(p => String(p.id) === String(selectedProduct));
+        console.log("Found product:", product);
+
+        if (!product) {
+            alert("Error: Producto no encontrado en la lista");
+            return;
+        }
 
         const newItem = {
             id: product.id,
@@ -65,10 +95,20 @@ export function AdminCombos() {
 
         setFormData(prev => ({
             ...prev,
-            items: [...prev.items, newItem]
+            items: [...(prev.items || []), newItem] // Safety check for items array
         }));
         setSelectedProduct('');
     };
+
+    // ... (inside render)
+
+    <button
+        type="button" // Explicitly set type to button
+        onClick={handleAddItem}
+        style={{ backgroundColor: '#10b981', color: 'white', border: 'none', padding: '0 1rem', borderRadius: '6px', cursor: 'pointer' }}
+    >
+        Agregar
+    </button>
 
     const handleRemoveItem = (index) => {
         setFormData(prev => ({
@@ -84,32 +124,68 @@ export function AdminCombos() {
             return { ...prev, items: newItems };
         });
     };
+    const handleSave = async () => {
+        console.log("Saving combo...", formData);
+        try {
+            const { ContentService } = await import('../../services/content');
 
-    const handleSave = () => {
-        let updatedCombos;
-        if (editingCombo) {
-            updatedCombos = combos.map(c => c.id === editingCombo.id ? { ...formData, id: editingCombo.id } : c);
-        } else {
-            updatedCombos = [...combos, { ...formData, id: Date.now() }];
+            if (editingCombo) {
+                console.log("Updating combo:", editingCombo.id);
+                await ContentService.updateCombo(editingCombo.id, formData);
+            } else {
+                console.log("Adding new combo");
+                await ContentService.addCombo({
+                    ...formData,
+                    createdAt: new Date().toISOString()
+                });
+            }
+
+            console.log("Combo saved successfully");
+            loadData();
+            setIsModalOpen(false);
+            alert('Combo guardado correctamente');
+        } catch (error) {
+            console.error("Error saving combo:", error);
+            alert('Error al guardar el combo');
         }
-
-        setCombos(updatedCombos);
-        localStorage.setItem('combos', JSON.stringify(updatedCombos));
-        setIsModalOpen(false);
-        // Dispatch event for App.jsx to pick up changes if needed, or just rely on reload/state lift
-        window.dispatchEvent(new Event('storage'));
     };
 
-    const handleDelete = (id) => {
-        if (window.confirm('¿Eliminar este combo?')) {
-            const updated = combos.filter(c => c.id !== id);
-            setCombos(updated);
-            localStorage.setItem('combos', JSON.stringify(updated));
+    const handleDelete = (id, e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
         }
+        setModalConfig({
+            isOpen: true,
+            title: '¿Eliminar combo?',
+            message: '¿Estás seguro de eliminar este combo? Esta acción no se puede deshacer.',
+            isDanger: true,
+            confirmText: 'Sí, eliminar',
+            onConfirm: async () => {
+                try {
+                    const { ContentService } = await import('../../services/content');
+                    await ContentService.deleteCombo(id);
+                    loadData();
+                } catch (error) {
+                    alert('Error al eliminar el combo');
+                }
+            }
+        });
     };
 
     return (
         <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+            <ConfirmationModal
+                isOpen={modalConfig.isOpen}
+                onClose={() => setModalConfig({ ...modalConfig, isOpen: false })}
+                onConfirm={modalConfig.onConfirm}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                isDanger={modalConfig.isDanger}
+                confirmText={modalConfig.confirmText}
+                cancelText={modalConfig.cancelText}
+            />
+
             <div style={{ padding: '1.5rem', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827' }}>Gestión de Combos</h2>
                 <button
@@ -147,8 +223,8 @@ export function AdminCombos() {
                                             </span>
                                         </div>
                                         <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                            <button onClick={() => handleOpenModal(combo)} style={{ padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }}>Editar</button>
-                                            <button onClick={() => handleDelete(combo.id)} style={{ padding: '0.25rem', border: '1px solid #fca5a5', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }}>
+                                            <button onClick={(e) => { e.stopPropagation(); handleOpenModal(combo); }} style={{ padding: '0.25rem', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }}>Editar</button>
+                                            <button onClick={(e) => handleDelete(combo.id, e)} style={{ padding: '0.25rem', border: '1px solid #fca5a5', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }}>
                                                 <Trash2 size={16} />
                                             </button>
                                         </div>
@@ -240,6 +316,7 @@ export function AdminCombos() {
                                         ))}
                                     </select>
                                     <button
+                                        type="button"
                                         onClick={handleAddItem}
                                         style={{ backgroundColor: '#10b981', color: 'white', border: 'none', padding: '0 1rem', borderRadius: '6px', cursor: 'pointer' }}
                                     >

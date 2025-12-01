@@ -12,7 +12,6 @@ export function ProductForm({ product, onClose, onSave, categories }) {
         image: '',
         description: '',
         stock: 'In Stock',
-        stock: 'In Stock',
         points: '',
         isBulk: false,
         averageWeight: ''
@@ -30,7 +29,6 @@ export function ProductForm({ product, onClose, onSave, categories }) {
                 image: product.image || '',
                 description: product.description || '',
                 stock: product.stock || 'In Stock',
-                stock: product.stock || 'In Stock',
                 points: product.points || '',
                 isBulk: product.isBulk || false,
                 averageWeight: product.averageWeight || '',
@@ -43,8 +41,6 @@ export function ProductForm({ product, onClose, onSave, categories }) {
         e.preventDefault();
         onSave({
             ...formData,
-            price: parseFloat(formData.price),
-            originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : null,
             price: parseFloat(formData.price),
             originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : null,
             points: formData.points ? parseInt(formData.points) : 0,
@@ -196,16 +192,17 @@ export function ProductForm({ product, onClose, onSave, categories }) {
 
                     <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
                         <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem' }}>Categoría</label>
+                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                                Categoría <span style={{ fontSize: '0.8rem', color: '#666', fontWeight: 'normal' }}>(Opcional)</span>
+                            </label>
                             <select
-                                required
                                 value={formData.category}
-                                onChange={e => setFormData({ ...formData, category: e.target.value })}
+                                onChange={e => setFormData({ ...formData, category: e.target.value, subcategory: '' })}
                                 style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #d1d5db' }}
                             >
-                                <option value="">Seleccionar...</option>
-                                {categories.map(cat => (
-                                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                <option value="">Sin Categoría (Pruebas)</option>
+                                {[...new Map(categories.map(item => [String(item.id), item])).values()].map(cat => (
+                                    <option key={String(cat.id)} value={cat.name}>{cat.name}</option>
                                 ))}
                             </select>
                         </div>
