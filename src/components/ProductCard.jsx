@@ -1,23 +1,12 @@
 import React from 'react';
 import { Heart, Plus } from 'lucide-react';
+import './ProductCard.css';
 
 export function ProductCard({ product, onAdd, isFavorite, onToggleFavorite, onClick, priority = false }) {
     return (
         <div
             onClick={onClick}
-            className="animate-scale-in"
-            style={{
-                backgroundColor: 'white',
-                borderRadius: 'var(--radius)',
-                padding: '0.75rem',
-                boxShadow: 'var(--shadow-sm)',
-                position: 'relative',
-                display: 'flex',
-                flexDirection: 'column',
-                height: '100%',
-                cursor: 'pointer',
-                overflow: 'hidden'
-            }}
+            className="product-card animate-scale-in"
         >
             {/* Badges */}
             <div style={{
@@ -27,21 +16,13 @@ export function ProductCard({ product, onAdd, isFavorite, onToggleFavorite, onCl
                 zIndex: 10
             }}>
                 <button
+                    className="product-card-favorite-btn"
                     onClick={(e) => {
                         e.stopPropagation();
                         onToggleFavorite();
                     }}
                     style={{
-                        backgroundColor: 'rgba(255,255,255,0.8)',
-                        borderRadius: '50%',
-                        width: '32px',
-                        height: '32px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: isFavorite ? 'var(--color-accent)' : '#999',
-                        border: 'none',
-                        cursor: 'pointer'
+                        color: isFavorite ? 'var(--color-accent)' : '#999'
                     }}
                 >
                     <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
@@ -49,104 +30,51 @@ export function ProductCard({ product, onAdd, isFavorite, onToggleFavorite, onCl
             </div>
 
             {product.originalPrice && (
-                <div style={{
-                    position: 'absolute',
-                    top: '12px',
-                    right: '-32px',
-                    backgroundColor: 'var(--color-accent)',
-                    color: 'white',
-                    fontSize: '0.7rem',
-                    fontWeight: 'bold',
-                    padding: '4px 30px',
-                    transform: 'rotate(45deg)',
-                    zIndex: 10,
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1px'
-                }}>
+                <div className="product-card-badge">
                     OFERTA
                 </div>
             )}
 
             {/* Image */}
-            <div style={{
-                marginBottom: '0.5rem',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                height: '140px'
-            }}>
+            <div className="product-card-image-container">
                 <img
                     src={product.image}
                     alt={product.name}
                     loading={priority ? "eager" : "lazy"}
                     width="100%"
                     height="140"
-                    style={{
-                        maxHeight: '100%',
-                        maxWidth: '100%',
-                        objectFit: 'contain'
-                    }}
+                    className="product-card-image"
                 />
             </div>
 
             {/* Content */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{
-                    fontSize: '0.9rem',
-                    fontWeight: '500',
-                    marginBottom: '0.5rem',
-                    lineHeight: '1.2',
-                    color: '#333',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
-                }}>
+            <div className="product-card-content">
+                <h3 className="product-card-title">
                     {product.name}
                 </h3>
 
                 {product.originalPrice && (
-                    <div style={{
-                        fontSize: '0.8rem',
-                        color: '#999',
-                        textDecoration: 'line-through',
-                        marginBottom: '2px'
-                    }}>
+                    <div className="product-card-original-price">
                         De: ${product.originalPrice.toFixed(2)}
                     </div>
                 )}
 
-                <div style={{
-                    fontSize: '1.2rem',
-                    fontWeight: '800',
-                    color: 'var(--color-primary)',
-                    marginBottom: '0.25rem'
-                }}>
+                <div className="product-card-price">
                     ${product.price.toFixed(2)}
                 </div>
 
                 {product.bonusPoints && (
-                    <div style={{
-                        fontSize: '0.75rem',
-                        color: '#e65100',
-                        fontWeight: 'bold',
-                        marginBottom: '0.75rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                    }}>
+                    <div className="product-card-bonus">
                         <span>+{product.bonusPoints} Puntos</span>
                     </div>
                 )}
 
                 <button
-                    className="btn-add"
+                    className="product-card-add-btn"
                     onClick={(e) => {
                         e.stopPropagation();
                         onAdd(product);
                     }}
-                    style={{ marginTop: 'auto' }}
                 >
                     <Plus size={16} style={{ marginRight: '4px', strokeWidth: 3 }} />
                     Agregar

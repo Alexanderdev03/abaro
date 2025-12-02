@@ -1,5 +1,6 @@
 import React from 'react';
-import { AdminLayout } from './AdminLayout';
+import { Routes, Route } from 'react-router-dom';
+import { AdminLayout } from '../../layouts/AdminLayout';
 import { AdminPanel } from './AdminPanel';
 import { AdminProducts } from './AdminProducts';
 import { AdminOrders } from './AdminOrders';
@@ -10,33 +11,25 @@ import { AdminSettings } from './AdminSettings';
 import { AdminCombos } from './AdminCombos';
 import { AdminCategories } from './AdminCategories';
 
-export function AdminRouter({ activeView, onViewChange, onLogout, onExit }) {
+export function AdminRouter() {
     return (
-        <AdminLayout
-            activeView={activeView}
-            onViewChange={onViewChange}
-            onLogout={onLogout}
-            onExit={onExit}
-        >
-            {activeView === 'dashboard' && <AdminPanel />}
-            {activeView === 'products' && <AdminProducts />}
-            {activeView === 'orders' && <AdminOrders />}
-            {activeView === 'customers' && <AdminCustomers />}
-            {activeView === 'promos' && <AdminPromotions />}
-            {activeView === 'content' && <AdminContent />}
-            {activeView === 'settings' && <AdminSettings />}
-            {activeView === 'combos' && <AdminCombos />}
-            {activeView === 'categories' && <AdminCategories />}
-
-            {/* Placeholder for other views */}
-            {activeView !== 'dashboard' && activeView !== 'products' && activeView !== 'orders' &&
-                activeView !== 'customers' && activeView !== 'promos' && activeView !== 'content' &&
-                activeView !== 'settings' && activeView !== 'combos' && activeView !== 'categories' && (
+        <Routes>
+            <Route element={<AdminLayout />}>
+                <Route index element={<AdminPanel />} />
+                <Route path="products" element={<AdminProducts />} />
+                <Route path="orders" element={<AdminOrders />} />
+                <Route path="customers" element={<AdminCustomers />} />
+                <Route path="promos" element={<AdminPromotions />} />
+                <Route path="content" element={<AdminContent />} />
+                <Route path="settings" element={<AdminSettings />} />
+                <Route path="combos" element={<AdminCombos />} />
+                <Route path="categories" element={<AdminCategories />} />
+                <Route path="*" element={
                     <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
-                        <h2>Sección en construcción: {activeView}</h2>
-                        <p>Pronto podrás gestionar {activeView} desde aquí.</p>
+                        <h2>Página no encontrada</h2>
                     </div>
-                )}
-        </AdminLayout>
+                } />
+            </Route>
+        </Routes>
     );
 }

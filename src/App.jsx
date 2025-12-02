@@ -1,126 +1,76 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { createFuseInstance, processSearchQuery } from './utils/searchUtils';
-import { ShoppingBasket, Apple, Milk, SprayCan, ChevronRight, Trash2, Plus, Minus, Dog, Pill, Croissant, Baby, Package, Clock, CheckCircle, ArrowUpDown, Heart, Search, MapPin, Share2 } from 'lucide-react';
-import { Header } from './components/Header';
-import { BottomNav } from './components/BottomNav';
-import { ProductCard } from './components/ProductCard';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { ProductActionModal } from './components/ProductActionModal';
-import { BarcodeScanner } from './components/BarcodeScanner';
 import { CheckoutModal } from './components/CheckoutModal';
-import { OffersCarousel } from './components/OffersCarousel';
 import { LoginModal } from './components/LoginModal';
 import { Toast } from './components/Toast';
-import { Flyer } from './components/Flyer';
 import { StoreMap } from './components/StoreMap';
-import { FlashSale } from './components/FlashSale';
-import { ComboSection } from './components/ComboSection';
-import { BulkProductModal } from './components/BulkProductModal';
-
 import { AdminRouter } from './components/admin/AdminRouter';
 import { Account } from './components/Account';
-import { ProductSkeleton } from './components/ProductSkeleton';
-import { api } from './services/api';
 import { CombosGrid } from './components/CombosGrid';
 import { HomeView } from './components/HomeView';
-import { seedCategories } from './utils/seedCategories';
+import { CategoriesView } from './components/CategoriesView';
 import { AuthProvider, useAuth } from './context/auth.jsx';
-
 import { CartProvider, useCart } from './context/cart.jsx';
 import { CartView } from './components/CartView';
 import { PointsView } from './components/PointsView';
 import { OrderService } from './services/orders';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
-
-const iconMap = {
-  ShoppingBasket, Apple, Milk, SprayCan, Dog, Pill, Croissant, Baby
-};
+import { MainLayout } from './layouts/MainLayout';
+import { useAppData } from './hooks/useAppData';
+import { useProductSearch } from './hooks/useProductSearch';
 
 function App() {
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  // Custom Hooks
+  const {
+    products,
+    categories,
+    isDataLoaded,
+    isLoading,
+    pointValue,
+    availableCoupons,
+    storeSettings,
+    rewardProducts
+  } = useAppData();
 
-  const [pointValue, setPointValue] = useState(0.10);
-  const [availableCoupons, setAvailableCoupons] = useState([]);
-  const [storeSettings, setStoreSettings] = useState({});
-  const [rewardProducts, setRewardProducts] = useState([]);
+  const {
+    searchQuery,
+    setSearchQuery,
+    selectedCategory,
+    setSelectedCategory,
+    selectedSubcategory,
+    setSelectedSubcategory,
+    sortOrder,
+    setSortOrder,
+    visibleCount,
+    setVisibleCount,
+    filteredProducts,
+    filteredCategories,
+    visibleProducts,
+    clearFilters
+  } = useProductSearch(products, categories);
 
-  const loadData = async () => {
-    try {
-      const { ContentService } = await import('./services/content');
-      const [productsData, categoriesData, settingsData, couponsData, rewardsData] = await Promise.all([
-        api.products.getAll(),
-        api.products.getCategories(),
-        ContentService.getSettings(),
-        ContentService.getCoupons(),
-        ContentService.getRewardProducts()
-      ]);
-
-      if (settingsData) {
-        setStoreSettings(settingsData);
-        if (settingsData.pointValue) {
-          setPointValue(Number(settingsData.pointValue));
-        }
-      }
-
-      // Deduplicate products by ID to prevent key collisions
-      const uniqueProducts = Array.from(new Map(productsData.map(item => [item.id, item])).values());
-
-      // Deduplicate categories by ID
-      const uniqueCategories = Array.from(new Map(categoriesData.map(item => [item.id, item])).values());
-
-      setProducts(uniqueProducts);
-      setCategories(uniqueCategories);
-      setAvailableCoupons(couponsData || []);
-      setRewardProducts(rewardsData || []);
-    } catch (error) {
-      console.error("Error loading data:", error);
-      showToast('Error al cargar datos', 'error');
-    } finally {
-      setIsDataLoaded(true);
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-
-
-
-
-  const [activeTab, setActiveTab] = useState('home');
-  const [adminView, setAdminView] = useState('dashboard');
-
+  // Cart Context
   const {
     cart,
     setCart,
     cartTotal,
-    cartCount,
     addToCart,
-    addBulkToCart,
     addComboToCart,
     removeFromCart,
-    updateQuantity,
-    clearCart,
-    selectedBulkProduct,
-    setSelectedBulkProduct,
-    closeBulkModal,
-    isCartAnimating
+    updateQuantity
   } = useCart();
 
+  // Auth Context
+  const { user, logout, setUser } = useAuth();
+
+  // Local State
   const [favorites, setFavorites] = useState(() => {
     const saved = localStorage.getItem('favorites');
     return saved ? JSON.parse(saved) : [];
   });
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedSubcategory, setSelectedSubcategory] = useState(null);
 
-  const { user, logout, setUser } = useAuth();
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [orders, setOrders] = useState(() => {
     const saved = localStorage.getItem('orders');
@@ -134,61 +84,44 @@ function App() {
   });
   const [isSavingList, setIsSavingList] = useState(false);
   const [newListName, setNewListName] = useState('');
-
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const [listName, setListName] = useState('');
 
   const [showCheckout, setShowCheckout] = useState(false);
   const [flyingItem, setFlyingItem] = useState(null);
-  const [sortOrder, setSortOrder] = useState(null); // null, 'asc', 'desc'
-  const [expandedOrderId, setExpandedOrderId] = useState(null);
-  const [toast, setToast] = useState(null); // { message, type }
-
+  const [toast, setToast] = useState(null);
   const [pointsToUse, setPointsToUse] = useState(0);
   const [showMap, setShowMap] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(20); // Initial load count
-
-  // Coupon State (Global for Cart and Checkout)
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
-
-  // Order Success Modal State
   const [showOrderSuccess, setShowOrderSuccess] = useState(false);
   const [lastOrder, setLastOrder] = useState(null);
 
+  const navigate = useNavigate();
 
-  // Reload data when switching to home tab to ensure freshness
-  useEffect(() => {
-    if (activeTab === 'home' || activeTab === 'points') {
-      loadData();
-    }
-  }, [activeTab]);
-
-  // Persist orders to localStorage
+  // Effects
   useEffect(() => {
     localStorage.setItem('orders', JSON.stringify(orders));
   }, [orders]);
 
-  // ... (rest of the file)
+  // Handlers
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const handleApplyCoupon = (codeToApply = couponCode) => {
     const code = codeToApply.toUpperCase();
     const userCoupons = user.coupons || [];
     const adminCoupons = JSON.parse(localStorage.getItem('adminCoupons') || '[]');
 
-    // Check user coupons first
     let validCoupon = userCoupons.find(c => c.code === code);
-
-    // If not found, check global admin coupons
     if (!validCoupon) {
       validCoupon = adminCoupons.find(c => c.code === code);
     }
 
     if (validCoupon) {
       setAppliedCoupon(validCoupon);
-      setCouponCode(code); // Ensure input reflects applied code
+      setCouponCode(code);
       showToast(`Cupón aplicado: ${code}`, 'success');
     } else {
       showToast('Cupón inválido o no encontrado', 'error');
@@ -196,8 +129,39 @@ function App() {
     }
   };
 
+  const { productCouponsDiscount, usedProductCoupons } = useMemo(() => {
+    let discount = 0;
+    let usedCoupons = [];
+    const userCoupons = user?.coupons || [];
+
+    cart.forEach(item => {
+      const productCoupons = userCoupons.filter(c =>
+        c.type === 'product' &&
+        (c.code.includes(`PROD-${item.id}-`) || c.discount === item.name)
+      );
+
+      if (productCoupons.length > 0) {
+        const quantityToDiscount = Math.min(productCoupons.length, item.quantity);
+        discount += quantityToDiscount * item.price;
+        usedCoupons = [...usedCoupons, ...productCoupons.slice(0, quantityToDiscount)];
+      }
+    });
+
+    return { productCouponsDiscount: discount, usedProductCoupons: usedCoupons };
+  }, [cart, user?.coupons]);
+
+  const discountAmount = pointsToUse * pointValue;
+  const couponDiscount = appliedCoupon ? (appliedCoupon.type === 'product' ? 0 : appliedCoupon.discount) : 0;
+  const finalTotal = Math.max(0, cartTotal - discountAmount - couponDiscount - productCouponsDiscount);
+
+  const totalSavings = cart.reduce((acc, item) => {
+    if (item.originalPrice && item.originalPrice > item.price) {
+      return acc + ((item.originalPrice - item.price) * item.quantity);
+    }
+    return acc;
+  }, 0) + productCouponsDiscount;
+
   const handleConfirmOrder = (details) => {
-    // ... (rest of function)
     const couponDiscount = details.coupon ? details.coupon.discount : 0;
     const subtotal = cart.reduce((acc, item) => acc + (item.isBulkSelection ? item.totalPrice : (item.price * item.quantity)), 0);
     const total = Math.max(0, subtotal - (pointsToUse * pointValue) - couponDiscount);
@@ -214,15 +178,11 @@ function App() {
       status: 'En camino'
     };
 
-
-    // Calculate points earned
-    // Calculate points earned
     const pointsPercentage = storeSettings.pointsPercentage || 1.5;
     const pointsEarned = cart.reduce((acc, item) => {
       if (item.bonusPoints && item.bonusPoints > 0) {
         return acc + (item.bonusPoints * item.quantity);
       }
-      // Calculate percentage based points
       const itemTotal = item.isBulkSelection ? item.totalPrice : (item.price * item.quantity);
       return acc + (itemTotal * (pointsPercentage / 100));
     }, 0);
@@ -230,11 +190,8 @@ function App() {
     setUser(currentUser => {
       let updatedUser = { ...currentUser };
       let userUpdated = false;
-
-      // Handle Coupon Consumption
       let updatedCoupons = currentUser.coupons || [];
 
-      // Remove general applied coupon
       if (details.coupon) {
         updatedCoupons = updatedCoupons.filter(c => {
           if (details.coupon.id && c.id) return c.id !== details.coupon.id;
@@ -243,7 +200,6 @@ function App() {
         userUpdated = true;
       }
 
-      // Remove used product coupons
       if (usedProductCoupons.length > 0) {
         const usedIds = new Set(usedProductCoupons.map(c => c.id));
         updatedCoupons = updatedCoupons.filter(c => !usedIds.has(c.id));
@@ -254,12 +210,10 @@ function App() {
         updatedUser = { ...updatedUser, coupons: updatedCoupons };
       }
 
-      // Handle Points Earned
       if (pointsEarned > 0) {
         const currentWallet = parseFloat(updatedUser.wallet || 0);
         updatedUser = { ...updatedUser, wallet: Number((currentWallet + pointsEarned).toFixed(2)) };
         userUpdated = true;
-        // Move toast outside or use effect, but for now it's fine here as side effect of event
       }
 
       if (userUpdated) {
@@ -273,7 +227,6 @@ function App() {
       showToast(`¡Ganaste ${pointsEarned} puntos!`);
     }
 
-    // Save to Firebase
     showToast('Guardando pedido en la nube...', 'info');
     OrderService.createOrder(newOrder)
       .then(id => {
@@ -288,12 +241,9 @@ function App() {
     setOrders(prev => [newOrder, ...prev]);
     setCart([]);
     setShowCheckout(false);
-    // setActiveTab('profile'); // Removed redirect to profile
-    // showToast('¡Pedido realizado con éxito!'); // Removed toast
     setLastOrder(newOrder);
     setShowOrderSuccess(true);
 
-    // WhatsApp Integration
     const savedSettings = JSON.parse(localStorage.getItem('storeSettings') || '{}');
     const phoneNumber = savedSettings.whatsappNumber || "529821041154";
 
@@ -310,12 +260,8 @@ function App() {
     }).join('\n');
 
     const message = `¡Hola! Quiero realizar un pedido en Abarrotes Alex.\n\n*Pedido #${newOrder.id}*\n\n*Productos:*\n${itemsList}\n\n*Total: $${newOrder.total.toFixed(2)}*\n\n*Dirección de Entrega:*\n${details.address}\n\n*Método de Pago:*\n${details.paymentMethod === 'cash' ? 'Efectivo' : 'Tarjeta'}`;
-
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
 
-    // Use window.location.href for mobile to ensure it opens the app
-    // or window.open for desktop. 
-    // Try-catch block to prevent errors from stopping the flow
     try {
       window.open(whatsappUrl, '_blank');
     } catch (e) {
@@ -324,236 +270,12 @@ function App() {
     }
   };
 
-
-  // Calculate Product Coupons Discount and Identify Used Coupons
-  const { productCouponsDiscount, usedProductCoupons } = useMemo(() => {
-    let discount = 0;
-    let usedCoupons = [];
-    const userCoupons = user?.coupons || [];
-
-    cart.forEach(item => {
-      // Find all coupons for this product
-      const productCoupons = userCoupons.filter(c =>
-        c.type === 'product' &&
-        (c.code.includes(`PROD-${item.id}-`) || c.discount === item.name) // Match by ID pattern or Name
-      );
-
-      if (productCoupons.length > 0) {
-        // Determine how many to use
-        const quantityToDiscount = Math.min(productCoupons.length, item.quantity);
-
-        // Calculate discount value (assuming full price discount for "Free Product" coupons)
-        // If coupon has a specific value, use that. For now, assuming free product.
-        // We can check if coupon has 'value' property, otherwise use item.price.
-        // Based on previous code: discount: product.name (so it's a free product)
-
-        discount += quantityToDiscount * item.price;
-
-        // Mark coupons as used
-        usedCoupons = [...usedCoupons, ...productCoupons.slice(0, quantityToDiscount)];
-      }
-    });
-
-    return { productCouponsDiscount: discount, usedProductCoupons: usedCoupons };
-  }, [cart, user?.coupons]);
-
-  // Cart calculations moved to Context
-  const discountAmount = pointsToUse * pointValue;
-  const couponDiscount = appliedCoupon ? (appliedCoupon.type === 'product' ? 0 : appliedCoupon.discount) : 0;
-
-  // Update finalTotal to include product coupons discount
-  // Ensure we don't go below zero
-  const finalTotal = Math.max(0, cartTotal - discountAmount - couponDiscount - productCouponsDiscount);
-
-  const totalSavings = cart.reduce((acc, item) => {
-    if (item.originalPrice && item.originalPrice > item.price) {
-      return acc + ((item.originalPrice - item.price) * item.quantity);
-    }
-    return acc;
-  }, 0) + productCouponsDiscount; // Add product coupons to total savings
-
-  const handleShareCart = () => {
-    if (cart.length === 0) return;
-
-    const itemsList = cart.map(item => `- ${item.name} x${item.quantity}`).join('\n');
-    const message = `¡Hola! Necesito comprar esto:\n\n${itemsList}\n\nTotal estimado: $${cartTotal.toFixed(2)}`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-  };
-
-  const handleReorder = (order) => {
-    setCart(prev => {
-      let newCart = [...prev];
-      order.items.forEach(orderItem => {
-        const existingIndex = newCart.findIndex(item => item.id === orderItem.id);
-        if (existingIndex >= 0) {
-          newCart[existingIndex] = {
-            ...newCart[existingIndex],
-            quantity: newCart[existingIndex].quantity + orderItem.quantity
-          };
-        } else {
-          newCart.push({ ...orderItem });
-        }
-      });
-      return newCart;
-    });
-    setActiveTab('cart');
-    showToast('¡Productos agregados al carrito!');
-  };
-
-  // Reset visible count when filters change
-  useEffect(() => {
-    setVisibleCount(20);
-  }, [selectedCategory, selectedSubcategory, searchQuery]);
-
-  const filteredProducts = useMemo(() => {
-    let result = products;
-
-    // 1. Search Filter (Global - Overrides Category)
-    if (searchQuery) {
-      const processedQuery = processSearchQuery(searchQuery);
-      const fuse = createFuseInstance(products);
-
-      const searchResults = fuse.search(processedQuery);
-      result = searchResults.map(r => r.item);
-
-      // Note: We do NOT filter by selectedCategory here if searching.
-      // This ensures that searching "Cafe" in "Categories" tab shows results 
-      // even if no category is selected (or if we are in "All Departments" view).
-    } else {
-      // Only apply category filter if no search query
-      if (selectedCategory) {
-        result = result.filter(product => product.category === selectedCategory);
-      }
-      if (selectedSubcategory) {
-        result = result.filter(product => product.subcategory === selectedSubcategory);
-      }
-    }
-
-    // 4. Sorting
-    return [...result].sort((a, b) => {
-      if (sortOrder === 'asc') return a.price - b.price;
-      if (sortOrder === 'desc') return b.price - a.price;
-      return 0;
-    });
-  }, [products, selectedCategory, selectedSubcategory, searchQuery, sortOrder]);
-
-  const filteredCategories = useMemo(() => {
-    if (!searchQuery) return categories;
-    const processedQuery = processSearchQuery(searchQuery).toLowerCase();
-    return categories.filter(cat => cat.name.toLowerCase().includes(processedQuery));
-  }, [categories, searchQuery]);
-
-  const visibleProducts = filteredProducts.slice(0, visibleCount);
-
-  // Cart calculations moved up
-
-  // Best Sellers (Mock - just take first 4 products)
-  const bestSellers = products.slice(0, 4);
-
-  function handleTabChange(tab) {
-    setActiveTab(tab);
-    if (tab === 'home') {
-      setSelectedCategory(null);
-      setSelectedSubcategory(null);
-      setSearchQuery('');
-    }
-  }
-
-  const handleLogout = () => {
-    logout();
-    setActiveTab('home');
-    showToast('Sesión cerrada correctamente');
-  };
-
-  // History API handling for Product Modal
-  const handleOpenProduct = (product) => {
-    // Smart Tap: If bulk product, open bulk selector directly
-    if (product.category === 'Frutas y Verduras' || product.averageWeight || product.isBulk || product.unit === 'kg') {
-      setSelectedBulkProduct(product);
-      return;
-    }
-
-    setSelectedProduct(product);
-    window.history.pushState({ modalOpen: true }, '', '#producto');
-  };
-
-  const handleCloseProduct = () => {
-    // Check if we have a history state to go back to, otherwise just close
-    if (window.history.state && window.history.state.modalOpen) {
-      window.history.back();
-    } else {
-      setSelectedProduct(null);
-    }
-  };
-
-  useEffect(() => {
-    // Check URL hash on mount to set initial tab
-    const hash = window.location.hash.replace('#', '');
-    if (hash) {
-      if (hash.startsWith('categoria-')) {
-        const catName = decodeURIComponent(hash.replace('categoria-', ''));
-        setSelectedCategory(catName);
-        setActiveTab('home');
-      } else if (['cart', 'admin', 'profile', 'categories', 'combos'].includes(hash)) {
-        setActiveTab(hash);
-      } else {
-        // Default to home for unknown hashes or 'producto'
-        setActiveTab('home');
-      }
-    }
-
-    const handlePopState = (event) => {
-      // Handle Modal Closing
-      if (selectedProduct) {
-        setSelectedProduct(null);
-        return; // Stop here if we just closed a modal
-      }
-
-      // Handle Category Navigation
-      if (event.state && event.state.view === 'categoria') {
-        setSelectedCategory(event.state.nombre);
-        setActiveTab('home');
-        return;
-      }
-
-      // Handle Tab Navigation
-      if (event.state && event.state.section) {
-        setActiveTab(event.state.section);
-      } else {
-        // If no state or no section, we assume we are back at Home
-        setActiveTab('home');
-        // Also clear filters if we go back to home base
-        setSelectedCategory(null);
-        setSelectedSubcategory(null);
-        setSearchQuery('');
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, [selectedProduct]); // Add selectedProduct dependency to ensure we have fresh state
-
-
-  // addToCart moved to Context
-
-  // handleBulkAddToCart moved to Context
-
-  // handleAddCombo moved to Context
-
-  // removeFromCart moved to Context
-
   const handleCategoryClick = (categoryName) => {
     setSelectedCategory(categoryName);
     setSelectedSubcategory(null);
     setSearchQuery('');
-    setActiveTab('home');
+    navigate('/');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    // Fix: Push state so back button works correctly
-    window.history.pushState({ section: 'home', view: 'categoria', nombre: categoryName }, '', '#home');
   };
 
   const toggleFavorite = (product) => {
@@ -572,7 +294,6 @@ function App() {
     });
   };
 
-  // List Management Functions
   const startSaveList = () => {
     setIsSavingList(true);
     setListName('');
@@ -583,18 +304,15 @@ function App() {
       showToast('Ingresa un nombre para la lista', 'error');
       return;
     }
-
     const newList = {
       id: Date.now(),
       name: listName,
       items: cart,
       date: new Date().toLocaleDateString()
     };
-
     const updatedLists = [...savedLists, newList];
     setSavedLists(updatedLists);
     localStorage.setItem('savedLists', JSON.stringify(updatedLists));
-
     setIsSavingList(false);
     showToast('Lista guardada correctamente');
   };
@@ -619,20 +337,24 @@ function App() {
     showToast('Lista cargada al carrito');
   };
 
-  const clearFilters = () => {
-    setSelectedCategory(null);
-    setSelectedSubcategory(null);
-    setSearchQuery('');
-    setSortOrder(null);
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+    showToast('Sesión cerrada correctamente');
   };
 
-  // Better to just render Home directly or force state change.
-  // Since we are in render, we shouldn't set state directly.
-  // But we can return the Home view or null and use useEffect to redirect.
-  // For simplicity and immediate effect, let's just render the Home view component 
-  // but strictly speaking we should change the activeTab.
+  const handleScan = (code) => {
+    const product = products.find(p => p.barcode === code || p.id === code);
+    if (product) {
+      addToCart(product);
+      showToast(`Agregado: ${product.name}`);
+    } else {
+      showToast('Producto no encontrado', 'error');
+    }
+  };
 
-  // Let's use a small effect component or just render a redirect message that auto-redirects
+  const bestSellers = products.slice(0, 4);
+
   if (!isDataLoaded) {
     return <div style={{ padding: '2rem', textAlign: 'center' }}>Cargando datos...</div>;
   }
@@ -641,184 +363,114 @@ function App() {
     return <LoginModal />;
   }
 
-  if (activeTab === 'admin') {
-    // Security Check: If not admin, redirect to home
-    // We check against the hardcoded email in AdminLayout or a role property if available
-    const ADMIN_EMAIL = 'alexanderdayanperazacasanova@gmail.com';
-    if (user.email !== ADMIN_EMAIL && user.role !== 'admin') {
-      setTimeout(() => setActiveTab('home'), 0);
-      return <div style={{ padding: '2rem', textAlign: 'center' }}>Redirigiendo...</div>;
-    }
-    return (
-      <AdminRouter
-        activeView={adminView}
-        onViewChange={setAdminView}
-        onLogout={() => setActiveTab('home')}
-        onExit={() => setActiveTab('home')}
-      />
-    );
-  }
-
   return (
-    <div className="app-container">
-      {selectedBulkProduct && (
-        <BulkProductModal
-          product={selectedBulkProduct}
-          onClose={closeBulkModal}
-          onAdd={addBulkToCart}
-        />
-      )}
-      {isScanning && <BarcodeScanner onScan={handleScan} onClose={() => setIsScanning(false)} />}
-      <Header
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        userName={user ? user.name : null}
-        onOpenScanner={() => setIsScanning(true)}
-        products={products}
-        categories={categories}
-        onCategorySelect={handleCategoryClick}
-        onProductSelect={handleOpenProduct}
-      />
-
-      <main style={{ padding: '1rem', paddingBottom: '100px', paddingTop: '90px', flex: 1 }}>
-        {activeTab === 'home' && (
-          <HomeView
-            categories={categories}
-            selectedCategory={selectedCategory}
-            selectedSubcategory={selectedSubcategory}
+    <>
+      <Routes>
+        <Route path="/" element={
+          <MainLayout
             searchQuery={searchQuery}
-            filteredProducts={filteredProducts}
-            filteredCategories={filteredCategories}
-            visibleProducts={visibleProducts}
-            isLoading={isLoading}
-            visibleCount={visibleCount}
-            setVisibleCount={setVisibleCount}
+            setSearchQuery={setSearchQuery}
+            isScanning={isScanning}
+            setIsScanning={setIsScanning}
+            handleScan={handleScan}
+            products={products}
+            categories={categories}
             handleCategoryClick={handleCategoryClick}
-            setSelectedSubcategory={setSelectedSubcategory}
-            handleTabChange={handleTabChange}
-            addToCart={addToCart}
-            favorites={favorites}
-            toggleFavorite={toggleFavorite}
-            handleOpenProduct={handleOpenProduct}
+            handleOpenProduct={setSelectedProduct}
             clearFilters={clearFilters}
-            sortOrder={sortOrder}
-            setSortOrder={setSortOrder}
-            bestSellers={bestSellers}
-            handleAddCombo={addComboToCart}
           />
-        )}
-
-        {activeTab === 'combos' && (
-          <CombosGrid onAddCombo={addComboToCart} onBack={() => handleTabChange('home')} />
-        )}
-
-        {activeTab === 'categories' && (
-          <div style={{ marginTop: '1rem' }}>
-            {!searchQuery && <h3 style={{ marginBottom: '1rem', textAlign: 'center' }}>Todos los Departamentos</h3>}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '1rem'
-            }}>
-              {filteredCategories.map(category => {
-                const Icon = iconMap[category.icon] || ShoppingBasket;
-                return (
-                  <button
-                    key={category.id}
-                    onClick={() => handleCategoryClick(category.name)}
-                    style={{
-                      backgroundColor: 'white',
-                      padding: '1.5rem',
-                      borderRadius: 'var(--radius)',
-                      boxShadow: 'var(--shadow-sm)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '1rem'
-                    }}
-                  >
-                    <div style={{
-                      width: '50px',
-                      height: '50px',
-                      backgroundColor: '#f5f5f5',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'var(--color-primary)'
-                    }}>
-                      <Icon size={24} />
-                    </div>
-                    <span style={{ fontWeight: '600', color: '#333' }}>{category.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {searchQuery && (
-              <div style={{ marginTop: '2rem' }}>
-                {filteredProducts.length > 0 ? (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-                    gap: '1rem'
-                  }}>
-                    {filteredProducts.map(product => (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        onAdd={addToCart}
-                        onClick={() => handleOpenProduct(product)}
-                        isFavorite={favorites.some(f => f.id === product.id)}
-                        onToggleFavorite={toggleFavorite}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>
-                    No se encontraron productos que coincidan con "{searchQuery}"
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'cart' && (
-          <CartView
-            cart={cart}
-            cartTotal={cartTotal}
-            isSavingList={isSavingList}
-            startSaveList={startSaveList}
-            newListName={newListName}
-            setNewListName={setNewListName}
-            onConfirmSaveList={saveList}
-            cancelSaveList={cancelSaveList}
-            removeFromCart={removeFromCart}
-            updateQuantity={updateQuantity}
-            user={user}
-            handleApplyCoupon={handleApplyCoupon}
-            appliedCoupon={appliedCoupon}
-            couponCode={couponCode}
-            setCouponCode={setCouponCode}
-            totalSavings={totalSavings}
-            productCouponsDiscount={productCouponsDiscount}
-            usedProductCoupons={usedProductCoupons}
-            pointsToUse={pointsToUse}
-            setPointsToUse={setPointsToUse}
-            pointValue={pointValue}
-            couponDiscount={couponDiscount}
-            finalTotal={finalTotal}
-            setShowCheckout={setShowCheckout}
-            savedLists={savedLists}
-            loadList={loadList}
-            deleteList={deleteList}
-            setActiveTab={setActiveTab}
-          />
-        )}
-
-        {
-          activeTab === 'profile' && (
+        }>
+          <Route index element={
+            <HomeView
+              categories={categories}
+              selectedCategory={selectedCategory}
+              selectedSubcategory={selectedSubcategory}
+              searchQuery={searchQuery}
+              filteredProducts={filteredProducts}
+              filteredCategories={filteredCategories}
+              visibleProducts={visibleProducts}
+              isLoading={isLoading}
+              visibleCount={visibleCount}
+              setVisibleCount={setVisibleCount}
+              handleCategoryClick={handleCategoryClick}
+              setSelectedSubcategory={setSelectedSubcategory}
+              handleTabChange={(tab) => {
+                if (tab === 'categories') navigate('/categories');
+                else if (tab === 'combos') navigate('/combos');
+                else navigate('/' + tab);
+              }}
+              addToCart={addToCart}
+              favorites={favorites}
+              toggleFavorite={toggleFavorite}
+              handleOpenProduct={setSelectedProduct}
+              clearFilters={clearFilters}
+              sortOrder={sortOrder}
+              setSortOrder={setSortOrder}
+              bestSellers={bestSellers}
+              handleAddCombo={addComboToCart}
+            />
+          } />
+          <Route path="cart" element={
+            <CartView
+              cart={cart}
+              cartTotal={cartTotal}
+              isSavingList={isSavingList}
+              startSaveList={startSaveList}
+              newListName={newListName}
+              setNewListName={setNewListName}
+              onConfirmSaveList={saveList}
+              cancelSaveList={cancelSaveList}
+              removeFromCart={removeFromCart}
+              updateQuantity={updateQuantity}
+              user={user}
+              handleApplyCoupon={handleApplyCoupon}
+              appliedCoupon={appliedCoupon}
+              couponCode={couponCode}
+              setCouponCode={setCouponCode}
+              totalSavings={totalSavings}
+              productCouponsDiscount={productCouponsDiscount}
+              usedProductCoupons={usedProductCoupons}
+              pointsToUse={pointsToUse}
+              setPointsToUse={setPointsToUse}
+              pointValue={pointValue}
+              couponDiscount={couponDiscount}
+              finalTotal={finalTotal}
+              setShowCheckout={setShowCheckout}
+              savedLists={savedLists}
+              loadList={loadList}
+              deleteList={deleteList}
+              setActiveTab={(tab) => navigate('/' + tab)}
+            />
+          } />
+          <Route path="points" element={
+            <PointsView
+              user={user}
+              pointValue={pointValue}
+              rewardProducts={rewardProducts}
+              availableCoupons={availableCoupons}
+              onUpdateUser={(updatedUser) => {
+                setUser(updatedUser);
+                localStorage.setItem('user', JSON.stringify(updatedUser));
+              }}
+              showToast={showToast}
+            />
+          } />
+          <Route path="combos" element={
+            <CombosGrid onAddCombo={addComboToCart} onBack={() => navigate('/')} />
+          } />
+          <Route path="categories" element={
+            <CategoriesView
+              filteredCategories={filteredCategories}
+              handleCategoryClick={handleCategoryClick}
+              searchQuery={searchQuery}
+              filteredProducts={filteredProducts}
+              addToCart={addToCart}
+              handleOpenProduct={setSelectedProduct}
+              favorites={favorites}
+              toggleFavorite={toggleFavorite}
+            />
+          } />
+          <Route path="profile" element={
             <Account
               user={user}
               orders={orders}
@@ -830,153 +482,92 @@ function App() {
               }}
               onToggleFavorite={toggleFavorite}
               onAddToCart={addToCart}
-              onProductSelect={handleOpenProduct}
-              onNavigateToAdmin={() => setActiveTab('admin')}
+              onProductSelect={setSelectedProduct}
+              onNavigateToAdmin={() => navigate('/admin')}
             />
-          )
-        }
-        {activeTab === 'points' && (
-          <PointsView
-            user={user}
-            pointValue={pointValue}
-            rewardProducts={rewardProducts}
-            availableCoupons={availableCoupons}
-            onUpdateUser={(updatedUser) => {
-              setUser(updatedUser);
-              localStorage.setItem('user', JSON.stringify(updatedUser));
-            }}
-            showToast={showToast}
-          />
-        )}
-        {
-          activeTab === 'admin' && (
-            <AdminLayout activeView={adminView} onViewChange={setAdminView} onLogout={() => setActiveTab('home')}>
-              {adminView === 'dashboard' && <AdminPanel />}
-              {adminView === 'products' && <AdminProducts />}
-              {adminView === 'categories' && <AdminCategories />}
-              {adminView === 'orders' && <AdminOrders />}
-              {adminView === 'customers' && <AdminCustomers />}
-              {adminView === 'promos' && <AdminPromotions />}
-              {adminView === 'combos' && <AdminCombos />}
-              {adminView === 'pos' && <AdminPOS />}
-              {adminView === 'content' && <AdminContent />}
-              {adminView === 'settings' && <AdminSettings />}
-            </AdminLayout>
-          )
-        }
-      </main >
+          } />
+        </Route>
 
-      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} cartCount={cartCount} isAnimating={isCartAnimating} user={user} />
+        <Route path="/admin/*" element={<AdminRouter />} />
+      </Routes>
 
-      {/* Product Action Modal */}
-      {
-        selectedProduct && (
-          <ProductActionModal
-            product={selectedProduct}
-            onClose={handleCloseProduct}
-            onAdd={addToCart}
-            products={products}
-            onProductSelect={handleOpenProduct}
-          />
-        )
-      }
+      {/* Global Modals */}
+      {selectedProduct && (
+        <ProductActionModal
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onAdd={addToCart}
+          products={products}
+          onProductSelect={setSelectedProduct}
+        />
+      )}
 
-      {/* Barcode Scanner */}
-      {
-        isScanning && (
-          <BarcodeScanner
-            onClose={() => setIsScanning(false)}
-            onScan={handleScan}
-          />
-        )
-      }
+      {showCheckout && (
+        <CheckoutModal
+          total={finalTotal}
+          onClose={() => setShowCheckout(false)}
+          onConfirm={handleConfirmOrder}
+          deliveryCost={storeSettings.deliveryCost || 15}
+          initialCoupon={appliedCoupon}
+        />
+      )}
 
-      {/* Checkout Modal */}
-      {
-        showCheckout && (
-          <CheckoutModal
-            total={finalTotal}
-            onClose={() => setShowCheckout(false)}
-            onConfirm={handleConfirmOrder}
-            deliveryCost={storeSettings.deliveryCost || 15}
-            initialCoupon={appliedCoupon}
-          />
-        )
-      }
+      {showOrderSuccess && lastOrder && (
+        <OrderSuccessModal
+          order={lastOrder}
+          onClose={() => {
+            setShowOrderSuccess(false);
+            setLastOrder(null);
+            setSearchQuery('');
+            navigate('/');
+          }}
+        />
+      )}
 
-      {/* Order Success Modal */}
-      {
-        showOrderSuccess && lastOrder && (
-          <OrderSuccessModal
-            order={lastOrder}
-            onClose={() => {
-              setShowOrderSuccess(false);
-              setLastOrder(null);
-              setSearchQuery(''); // Clear search query
-              setActiveTab('home'); // Redirect to home after closing success modal
-            }}
-          />
-        )
-      }
+      {flyingItem && (
+        <img
+          src={flyingItem.image}
+          alt=""
+          style={{
+            position: 'fixed',
+            left: flyingItem.x,
+            top: flyingItem.y,
+            width: '50px',
+            height: '50px',
+            objectFit: 'contain',
+            borderRadius: '50%',
+            pointerEvents: 'none',
+            zIndex: 9999,
+            animation: 'flyToCart 0.8s cubic-bezier(0.2, 1, 0.3, 1) forwards'
+          }}
+        />
+      )}
 
-      {/* Fly to Cart Animation */}
-      {
-        flyingItem && (
-          <img
-            src={flyingItem.image}
-            alt=""
-            style={{
-              position: 'fixed',
-              left: flyingItem.x,
-              top: flyingItem.y,
-              width: '50px',
-              height: '50px',
-              objectFit: 'contain',
-              borderRadius: '50%',
-              pointerEvents: 'none',
-              zIndex: 9999,
-              animation: 'flyToCart 0.8s cubic-bezier(0.2, 1, 0.3, 1) forwards'
-            }}
-          />
-        )
-      }
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+          duration={2000}
+        />
+      )}
 
-      {/* Toast Notification */}
-      {
-        toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-            duration={200}
-          />
-        )
-      }
-
-      {/* Store Map Modal */}
-      {
-        showMap && (
-          <StoreMap onClose={() => setShowMap(false)} />
-        )
-      }
-      {/* Barcode Scanner Overlay */}
-      {
-        isScanning && (
-          <BarcodeScanner
-            onClose={() => setIsScanning(false)}
-            onScan={handleScan}
-          />
-        )
-      }
-    </div >
+      {showMap && (
+        <StoreMap onClose={() => setShowMap(false)} />
+      )}
+    </>
   );
 }
 
 function AppWrapper() {
   return (
-    <CartProvider>
-      <App />
-    </CartProvider>
+    <AuthProvider>
+      <CartProvider>
+        <Router>
+          <App />
+        </Router>
+      </CartProvider>
+    </AuthProvider>
   );
 }
 
