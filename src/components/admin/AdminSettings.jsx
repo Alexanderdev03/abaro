@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Save, Bell, Shield, Database, Upload, Download, Clock, Palette, Image as ImageIcon, Trash2, AlertTriangle } from 'lucide-react';
 import { Toast } from '../Toast';
+import { ContentService } from '../../services/content';
 import { ProductService } from '../../services/products';
 import { ConfirmationModal } from '../ConfirmationModal';
 
@@ -40,6 +41,11 @@ export function AdminSettings() {
         const savedSettings = localStorage.getItem('storeSettings');
         if (savedSettings) {
             setSettings(JSON.parse(savedSettings));
+        } else {
+            // Try to load from Firestore if not in local storage
+            ContentService.getSettings().then(data => {
+                if (data) setSettings(data);
+            });
         }
     }, []);
 
@@ -60,14 +66,22 @@ export function AdminSettings() {
         }));
     };
 
-    const handleSave = () => {
-        localStorage.setItem('storeSettings', JSON.stringify(settings));
+    const handleSave = async () => {
+        try {
+            localStorage.setItem('storeSettings', JSON.stringify(settings));
 
-        // Update CSS variables for live preview
-        document.documentElement.style.setProperty('--color-primary', settings.primaryColor);
-        document.documentElement.style.setProperty('--color-secondary', settings.secondaryColor);
+            // Update CSS variables for live preview
+            document.documentElement.style.setProperty('--color-primary', settings.primaryColor);
+            document.documentElement.style.setProperty('--color-secondary', settings.secondaryColor);
 
-        setToast({ message: 'Configuración guardada correctamente', type: 'success' });
+            // Save to Firestore
+            await ContentService.saveSettings(settings);
+
+            setToast({ message: 'Configuración guardada y sincronizada', type: 'success' });
+        } catch (error) {
+            console.error("Error saving settings:", error);
+            setToast({ message: 'Guardado localmente, pero falló la sincronización', type: 'warning' });
+        }
     };
 
     const handleLogoUpload = (e) => {
@@ -263,6 +277,17 @@ export function AdminSettings() {
                                 style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #d1d5db' }}
                             />
                             <small style={{ color: '#6b7280' }}>Ej: 0.10 significa que 10 puntos = $1.00</small>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', marginBottom: '0.5rem' }}>% Puntos por Compra</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                value={settings.pointsPercentage || 1.5}
+                                onChange={(e) => handleChange('pointsPercentage', parseFloat(e.target.value))}
+                                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #d1d5db' }}
+                            />
+                            <small style={{ color: '#6b7280' }}>Porcentaje del total que se convierte en puntos (Default: 1.5%)</small>
                         </div>
                     </div>
 

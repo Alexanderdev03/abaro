@@ -4,7 +4,7 @@ import { ShoppingBasket, Apple, Milk, SprayCan, ChevronRight, Trash2, Plus, Minu
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { ProductCard } from './components/ProductCard';
-import { ProductDetails } from './components/ProductDetails';
+import { ProductActionModal } from './components/ProductActionModal';
 import { BarcodeScanner } from './components/BarcodeScanner';
 import { CheckoutModal } from './components/CheckoutModal';
 import { OffersCarousel } from './components/OffersCarousel';
@@ -106,6 +106,7 @@ function App() {
     updateQuantity,
     clearCart,
     selectedBulkProduct,
+    setSelectedBulkProduct,
     closeBulkModal,
     isCartAnimating
   } = useCart();
@@ -216,7 +217,15 @@ function App() {
 
     // Calculate points earned
     // Calculate points earned
-    const pointsEarned = cart.reduce((acc, item) => acc + ((item.bonusPoints || 0) * item.quantity), 0);
+    const pointsPercentage = storeSettings.pointsPercentage || 1.5;
+    const pointsEarned = cart.reduce((acc, item) => {
+      if (item.bonusPoints && item.bonusPoints > 0) {
+        return acc + (item.bonusPoints * item.quantity);
+      }
+      // Calculate percentage based points
+      const itemTotal = item.isBulkSelection ? item.totalPrice : (item.price * item.quantity);
+      return acc + (itemTotal * (pointsPercentage / 100));
+    }, 0);
 
     setUser(currentUser => {
       let updatedUser = { ...currentUser };
@@ -247,7 +256,8 @@ function App() {
 
       // Handle Points Earned
       if (pointsEarned > 0) {
-        updatedUser = { ...updatedUser, wallet: (updatedUser.wallet || 0) + pointsEarned };
+        const currentWallet = parseFloat(updatedUser.wallet || 0);
+        updatedUser = { ...updatedUser, wallet: Number((currentWallet + pointsEarned).toFixed(2)) };
         userUpdated = true;
         // Move toast outside or use effect, but for now it's fine here as side effect of event
       }
@@ -284,8 +294,8 @@ function App() {
     setShowOrderSuccess(true);
 
     // WhatsApp Integration
-    const storeSettings = JSON.parse(localStorage.getItem('storeSettings') || '{}');
-    const phoneNumber = storeSettings.whatsappNumber || "529821041154";
+    const savedSettings = JSON.parse(localStorage.getItem('storeSettings') || '{}');
+    const phoneNumber = savedSettings.whatsappNumber || "529821041154";
 
     const itemsList = newOrder.items.map(item => {
       let desc = `- ${item.name}`;
@@ -305,10 +315,15 @@ function App() {
 
     // Use window.location.href for mobile to ensure it opens the app
     // or window.open for desktop. 
-    // For now, let's try window.open but if it fails/blocks, user might need to allow popups.
-    // Better yet, let's use a direct link click simulation or just window.open which usually works on mobile.
-    window.open(whatsappUrl, '_blank');
+    // Try-catch block to prevent errors from stopping the flow
+    try {
+      window.open(whatsappUrl, '_blank');
+    } catch (e) {
+      console.error("Error opening WhatsApp:", e);
+      window.location.href = whatsappUrl;
+    }
   };
+
 
   // Calculate Product Coupons Discount and Identify Used Coupons
   const { productCouponsDiscount, usedProductCoupons } = useMemo(() => {
@@ -395,13 +410,16 @@ function App() {
     let result = products;
 
     // 1. Search Filter (Global - Overrides Category)
-    // 1. Search Filter (Global - Overrides Category)
     if (searchQuery) {
       const processedQuery = processSearchQuery(searchQuery);
       const fuse = createFuseInstance(products);
 
       const searchResults = fuse.search(processedQuery);
       result = searchResults.map(r => r.item);
+
+      // Note: We do NOT filter by selectedCategory here if searching.
+      // This ensures that searching "Cafe" in "Categories" tab shows results 
+      // even if no category is selected (or if we are in "All Departments" view).
     } else {
       // Only apply category filter if no search query
       if (selectedCategory) {
@@ -421,7 +439,7 @@ function App() {
   }, [products, selectedCategory, selectedSubcategory, searchQuery, sortOrder]);
 
   const filteredCategories = useMemo(() => {
-    if (!searchQuery) return [];
+    if (!searchQuery) return categories;
     const processedQuery = processSearchQuery(searchQuery).toLowerCase();
     return categories.filter(cat => cat.name.toLowerCase().includes(processedQuery));
   }, [categories, searchQuery]);
@@ -450,6 +468,12 @@ function App() {
 
   // History API handling for Product Modal
   const handleOpenProduct = (product) => {
+    // Smart Tap: If bulk product, open bulk selector directly
+    if (product.category === 'Frutas y Verduras' || product.averageWeight || product.isBulk || product.unit === 'kg') {
+      setSelectedBulkProduct(product);
+      return;
+    }
+
     setSelectedProduct(product);
     window.history.pushState({ modalOpen: true }, '', '#producto');
   };
@@ -513,39 +537,6 @@ function App() {
     };
   }, [selectedProduct]); // Add selectedProduct dependency to ensure we have fresh state
 
-  function handleTabChange(tab) {
-    if (tab === 'home') {
-      if (activeTab !== 'home') {
-        // If we are not on home, try to go back in history to reach home
-        // This assumes the user navigated from Home -> Tab.
-        // If they went Home -> Tab A -> Tab B, going back once might go to Tab A.
-        // For simplicity and "Home Base" behavior, we might want to just reset.
-        // But the requirement says: "Si el usuario toca el botón de 'Inicio' manualmente, usa history.back()"
-
-        // We need to be careful. If we just push 'home', we build a stack.
-        // If we use back(), we might exit if the stack is empty (unlikely if we came from home).
-
-        // Let's check if we have state. If we have state.section, we are deep.
-        if (window.history.state && window.history.state.section) {
-          window.history.back();
-        } else {
-          // Fallback if we are somehow on a tab but without state (e.g. direct load)
-          setActiveTab('home');
-          // Clear URL hash
-          window.history.replaceState(null, '', ' ');
-        }
-      } else {
-        // Already on home, maybe clear filters
-        setSelectedCategory(null);
-        setSelectedSubcategory(null);
-        setSearchQuery('');
-      }
-    } else {
-      // Navigate to a new tab
-      setActiveTab(tab);
-      window.history.pushState({ section: tab }, '', `#${tab}`);
-    }
-  }
 
   // addToCart moved to Context
 
@@ -561,6 +552,8 @@ function App() {
     setSearchQuery('');
     setActiveTab('home');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Fix: Push state so back button works correctly
+    window.history.pushState({ section: 'home', view: 'categoria', nombre: categoryName }, '', '#home');
   };
 
   const toggleFavorite = (product) => {
@@ -633,6 +626,13 @@ function App() {
     setSortOrder(null);
   };
 
+  // Better to just render Home directly or force state change.
+  // Since we are in render, we shouldn't set state directly.
+  // But we can return the Home view or null and use useEffect to redirect.
+  // For simplicity and immediate effect, let's just render the Home view component 
+  // but strictly speaking we should change the activeTab.
+
+  // Let's use a small effect component or just render a redirect message that auto-redirects
   if (!isDataLoaded) {
     return <div style={{ padding: '2rem', textAlign: 'center' }}>Cargando datos...</div>;
   }
@@ -642,6 +642,13 @@ function App() {
   }
 
   if (activeTab === 'admin') {
+    // Security Check: If not admin, redirect to home
+    // We check against the hardcoded email in AdminLayout or a role property if available
+    const ADMIN_EMAIL = 'alexanderdayanperazacasanova@gmail.com';
+    if (user.email !== ADMIN_EMAIL && user.role !== 'admin') {
+      setTimeout(() => setActiveTab('home'), 0);
+      return <div style={{ padding: '2rem', textAlign: 'center' }}>Redirigiendo...</div>;
+    }
     return (
       <AdminRouter
         activeView={adminView}
@@ -673,7 +680,7 @@ function App() {
         onProductSelect={handleOpenProduct}
       />
 
-      <main style={{ padding: '1rem', paddingBottom: '80px', paddingTop: '90px', flex: 1 }}>
+      <main style={{ padding: '1rem', paddingBottom: '100px', paddingTop: '90px', flex: 1 }}>
         {activeTab === 'home' && (
           <HomeView
             categories={categories}
@@ -707,13 +714,13 @@ function App() {
 
         {activeTab === 'categories' && (
           <div style={{ marginTop: '1rem' }}>
-            <h3 style={{ marginBottom: '1rem', textAlign: 'center' }}>Todos los Departamentos</h3>
+            {!searchQuery && <h3 style={{ marginBottom: '1rem', textAlign: 'center' }}>Todos los Departamentos</h3>}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(2, 1fr)',
               gap: '1rem'
             }}>
-              {categories.map(category => {
+              {filteredCategories.map(category => {
                 const Icon = iconMap[category.icon] || ShoppingBasket;
                 return (
                   <button
@@ -747,6 +754,33 @@ function App() {
                 );
               })}
             </div>
+
+            {searchQuery && (
+              <div style={{ marginTop: '2rem' }}>
+                {filteredProducts.length > 0 ? (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                    gap: '1rem'
+                  }}>
+                    {filteredProducts.map(product => (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        onAdd={addToCart}
+                        onClick={() => handleOpenProduct(product)}
+                        isFavorite={favorites.some(f => f.id === product.id)}
+                        onToggleFavorite={toggleFavorite}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>
+                    No se encontraron productos que coincidan con "{searchQuery}"
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -797,6 +831,7 @@ function App() {
               onToggleFavorite={toggleFavorite}
               onAddToCart={addToCart}
               onProductSelect={handleOpenProduct}
+              onNavigateToAdmin={() => setActiveTab('admin')}
             />
           )
         }
@@ -833,16 +868,14 @@ function App() {
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} cartCount={cartCount} isAnimating={isCartAnimating} user={user} />
 
-      {/* Product Details Modal */}
+      {/* Product Action Modal */}
       {
         selectedProduct && (
-          <ProductDetails
+          <ProductActionModal
             product={selectedProduct}
-            products={products}
             onClose={handleCloseProduct}
             onAdd={addToCart}
-            isFavorite={favorites.some(fav => fav.id === selectedProduct.id)}
-            onToggleFavorite={() => toggleFavorite(selectedProduct)}
+            products={products}
             onProductSelect={handleOpenProduct}
           />
         )

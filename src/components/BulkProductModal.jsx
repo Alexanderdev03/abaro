@@ -6,6 +6,16 @@ export function BulkProductModal({ product, onClose, onAdd }) {
     const [weight, setWeight] = useState(1.0); // in kg
     const [quantity, setQuantity] = useState(1); // units
     const [notes, setNotes] = useState('');
+    const [isVisible, setIsVisible] = useState(false);
+
+    useEffect(() => {
+        requestAnimationFrame(() => setIsVisible(true));
+    }, []);
+
+    const handleClose = () => {
+        setIsVisible(false);
+        setTimeout(onClose, 300);
+    };
 
     const handleWeightChange = (val) => {
         setWeight(parseFloat(val));
@@ -51,27 +61,64 @@ export function BulkProductModal({ product, onClose, onAdd }) {
             totalPrice: finalPrice,
             weight: finalWeight
         });
+        handleClose();
     };
 
     return (
         <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 1200,
-            display: 'flex', alignItems: 'flex-end', justifyContent: 'center'
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            zIndex: 2000,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+            pointerEvents: 'none'
         }}>
-            <div className="animate-slide-up" style={{
+            {/* Backdrop */}
+            <div
+                onClick={handleClose}
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    opacity: isVisible ? 1 : 0,
+                    transition: 'opacity 0.3s ease',
+                    pointerEvents: 'auto'
+                }}
+            />
+
+            {/* Bottom Sheet */}
+            <div style={{
                 backgroundColor: 'white',
-                width: '100%',
-                maxWidth: '500px',
-                borderTopLeftRadius: '20px',
-                borderTopRightRadius: '20px',
+                borderTopLeftRadius: '24px',
+                borderTopRightRadius: '24px',
                 padding: '1.5rem',
+                transform: isVisible ? 'translateY(0)' : 'translateY(100%)',
+                transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                pointerEvents: 'auto',
+                position: 'relative',
                 maxHeight: '90vh',
-                overflowY: 'auto'
+                overflowY: 'auto',
+                boxShadow: '0 -4px 20px rgba(0,0,0,0.1)'
             }}>
+                {/* Close Handle */}
+                <div style={{
+                    width: '40px',
+                    height: '4px',
+                    backgroundColor: '#e0e0e0',
+                    borderRadius: '2px',
+                    margin: '0 auto 1.5rem auto'
+                }} />
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{product.name}</h3>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', padding: '4px' }}>
+                    <button onClick={handleClose} style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer' }}>
                         <X size={24} color="#666" />
                     </button>
                 </div>
@@ -95,7 +142,8 @@ export function BulkProductModal({ product, onClose, onAdd }) {
                                 boxShadow: mode === 'unit' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
                                 fontWeight: '600',
                                 color: mode === 'unit' ? 'var(--color-primary)' : '#666',
-                                transition: 'all 0.2s'
+                                transition: 'all 0.2s',
+                                cursor: 'pointer'
                             }}
                         >
                             Por Pieza
@@ -111,7 +159,8 @@ export function BulkProductModal({ product, onClose, onAdd }) {
                                 boxShadow: mode === 'weight' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
                                 fontWeight: '600',
                                 color: mode === 'weight' ? 'var(--color-primary)' : '#666',
-                                transition: 'all 0.2s'
+                                transition: 'all 0.2s',
+                                cursor: 'pointer'
                             }}
                         >
                             Por Kilo
@@ -124,7 +173,7 @@ export function BulkProductModal({ product, onClose, onAdd }) {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f9fafb', padding: '1rem', borderRadius: '12px' }}>
                             <button
                                 onClick={() => handleQuantityChange(-1)}
-                                style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #ddd', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #ddd', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                             >
                                 <Minus size={20} />
                             </button>
@@ -138,7 +187,7 @@ export function BulkProductModal({ product, onClose, onAdd }) {
                             </div>
                             <button
                                 onClick={() => handleQuantityChange(1)}
-                                style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #ddd', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #ddd', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                             >
                                 <Plus size={20} />
                             </button>
@@ -148,7 +197,7 @@ export function BulkProductModal({ product, onClose, onAdd }) {
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1rem' }}>
                                 <button
                                     onClick={() => setWeight(Math.max(0.05, weight - 0.05))}
-                                    style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #ddd', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #ddd', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                                 >
                                     <Minus size={20} />
                                 </button>
@@ -157,33 +206,40 @@ export function BulkProductModal({ product, onClose, onAdd }) {
                                 </div>
                                 <button
                                     onClick={() => setWeight(weight + 0.05)}
-                                    style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #ddd', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #ddd', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                                 >
                                     <Plus size={20} />
                                 </button>
                             </div>
 
-                            <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-                                {(typeof product.bulkSuggestions === 'string' && product.bulkSuggestions.trim().length > 0
-                                    ? product.bulkSuggestions.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n))
-                                    : [0.100, 0.250, 0.500, 1.000]
-                                ).map(w => (
-                                    <button
-                                        key={w}
-                                        onClick={() => setWeight(w)}
-                                        style={{
-                                            padding: '0.5rem 1rem',
-                                            borderRadius: '20px',
-                                            border: weight === w ? '2px solid var(--color-primary)' : '1px solid #ddd',
-                                            backgroundColor: weight === w ? '#eff6ff' : 'white',
-                                            color: weight === w ? 'var(--color-primary)' : '#666',
-                                            fontWeight: '500',
-                                            whiteSpace: 'nowrap'
-                                        }}
-                                    >
-                                        {w >= 1 ? `${w} kg` : `${w * 1000}g`}
-                                    </button>
-                                ))}
+                            <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem', minHeight: '50px' }}>
+                                {(() => {
+                                    let suggestions = [0.100, 0.250, 0.500, 1.000];
+                                    if (product.bulkSuggestions && typeof product.bulkSuggestions === 'string' && product.bulkSuggestions.trim().length > 0) {
+                                        const parsed = product.bulkSuggestions.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+                                        if (parsed.length > 0) suggestions = parsed;
+                                    }
+
+                                    return suggestions.map(w => (
+                                        <button
+                                            key={w}
+                                            onClick={() => setWeight(w)}
+                                            style={{
+                                                padding: '0.5rem 1rem',
+                                                borderRadius: '20px',
+                                                border: Math.abs(weight - w) < 0.001 ? '2px solid var(--color-primary)' : '1px solid #ddd',
+                                                backgroundColor: Math.abs(weight - w) < 0.001 ? '#eff6ff' : 'white',
+                                                color: Math.abs(weight - w) < 0.001 ? 'var(--color-primary)' : '#666',
+                                                fontWeight: '500',
+                                                whiteSpace: 'nowrap',
+                                                cursor: 'pointer',
+                                                flexShrink: 0
+                                            }}
+                                        >
+                                            {w >= 1 ? `${w} kg` : `${w * 1000}g`}
+                                        </button>
+                                    ));
+                                })()}
                             </div>
                         </div>
                     )}
@@ -222,7 +278,9 @@ export function BulkProductModal({ product, onClose, onAdd }) {
                         fontWeight: 'bold',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center'
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
                     }}
                 >
                     <span>Agregar al carrito</span>

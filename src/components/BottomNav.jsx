@@ -14,7 +14,9 @@ export function BottomNav({ activeTab, onTabChange, cartCount, isAnimating, user
       justifyContent: 'space-around',
       padding: '0.75rem 0.5rem',
       zIndex: 1000,
-      boxShadow: '0 -2px 10px rgba(0,0,0,0.05)'
+      boxShadow: '0 -2px 10px rgba(0,0,0,0.05)',
+      userSelect: 'none',
+      touchAction: 'manipulation'
     }}>
       <button
         onClick={() => onTabChange('home')}
@@ -122,24 +124,7 @@ export function BottomNav({ activeTab, onTabChange, cartCount, isAnimating, user
         <span style={{ fontSize: '0.7rem', marginTop: '4px' }}>Cuenta</span>
       </button>
 
-      {/* Admin Tab - Only visible for admin role */}
-      {user?.role === 'admin' && (
-        <button
-          onClick={() => onTabChange('admin')}
-          style={{
-            background: 'none',
-            border: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            color: activeTab === 'admin' ? 'var(--color-primary)' : '#999',
-            cursor: 'pointer'
-          }}
-        >
-          <Settings size={24} />
-          <span style={{ fontSize: '0.7rem', marginTop: '4px' }}>Admin</span>
-        </button>
-      )}
+
     </nav>
   );
 }

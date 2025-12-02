@@ -133,6 +133,7 @@ export function CartProvider({ children }) {
         updateQuantity,
         clearCart,
         selectedBulkProduct,
+        setSelectedBulkProduct,
         closeBulkModal,
         isCartAnimating
     };

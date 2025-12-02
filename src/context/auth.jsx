@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { auth, googleProvider } from '../firebase/config';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 
@@ -11,6 +11,8 @@ export function useAuth() {
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    const isRemoteUpdate = useRef(false);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -64,19 +66,21 @@ export function AuthProvider({ children }) {
                     const unsubscribe = onSnapshot(userRef, (doc) => {
                         if (doc.exists()) {
                             const userData = doc.data();
-                            setUser(prev => ({
-                                ...prev,
-                                ...userData,
-                                // Ensure critical fields are preserved if missing in DB (though syncUser should handle it)
-                                role: userData.role || prev.role,
-                                wallet: userData.wallet || 0,
-                                coupons: userData.coupons || []
-                            }));
-                            // Update local storage to keep it in sync
-                            localStorage.setItem('user', JSON.stringify({
-                                ...user,
-                                ...userData
-                            }));
+                            isRemoteUpdate.current = true; // Mark as remote update
+                            setUser(prev => {
+                                const updatedUser = {
+                                    ...prev,
+                                    ...userData,
+                                    // Ensure critical fields are preserved if missing in DB
+                                    role: userData.role || prev.role,
+                                    // Prefer DB value if defined, otherwise keep local (prevents overwriting with 0 if missing)
+                                    wallet: userData.wallet !== undefined ? userData.wallet : (prev.wallet || 0),
+                                    coupons: userData.coupons || []
+                                };
+                                // Update local storage with the FRESH updatedUser
+                                localStorage.setItem('user', JSON.stringify(updatedUser));
+                                return updatedUser;
+                            });
                         }
                     });
                     return () => unsubscribe();
@@ -85,9 +89,13 @@ export function AuthProvider({ children }) {
         }
     }, [user?.email]); // Only re-subscribe if email changes
 
-    // Sync user to Firestore whenever it changes
+    // Sync user to Firestore whenever it changes LOCALLY
     useEffect(() => {
         if (user) {
+            if (isRemoteUpdate.current) {
+                isRemoteUpdate.current = false; // Reset flag and skip sync
+                return;
+            }
             import('../services/users').then(({ UserService }) => {
                 UserService.syncUser(user);
             });

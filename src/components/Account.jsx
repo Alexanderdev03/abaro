@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { ChevronRight, Package, User, MapPin, Mail, Heart, LogOut, ArrowLeft, CheckCircle, Clock, Truck, Home, CreditCard } from 'lucide-react';
+import { ChevronRight, Package, User, MapPin, Mail, Heart, LogOut, ArrowLeft, CheckCircle, Clock, Truck, Home, CreditCard, Settings } from 'lucide-react';
 import { ProductCard } from './ProductCard';
 import { OrderDetailsModal } from './common/OrderDetailsModal';
 
-export function Account({ user, orders, favorites, onLogout, onUpdateUser, onToggleFavorite, onAddToCart, onProductSelect }) {
+export function Account({ user, orders, favorites, onLogout, onUpdateUser, onToggleFavorite, onAddToCart, onProductSelect, onNavigateToAdmin }) {
     const [currentView, setCurrentView] = useState('menu'); // menu, orders, payment, personal, addresses, privacy, favorites
     const [selectedOrder, setSelectedOrder] = useState(null);
 
@@ -115,6 +115,25 @@ export function Account({ user, orders, favorites, onLogout, onUpdateUser, onTog
                             />
                         </div>
                     </div>
+
+                    {/* Admin Panel Access */}
+                    {user?.role === 'admin' && (
+                        <div>
+                            <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '0.5rem', color: '#333', marginLeft: '0.5rem' }}>
+                                Administración
+                            </h3>
+                            <div style={{ borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', backgroundColor: 'white' }}>
+                                <MenuItem
+                                    icon={Settings}
+                                    title="Panel de Administrador"
+                                    subtitle="Gestionar productos, pedidos y configuración"
+                                    onClick={onNavigateToAdmin}
+                                    isLast={true}
+                                />
+                            </div>
+                        </div>
+                    )}
+
 
                     {/* Logout Button */}
                     <button
