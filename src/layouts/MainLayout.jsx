@@ -17,13 +17,15 @@ export const MainLayout = ({
     categories,
     handleCategoryClick,
     handleOpenProduct,
-    clearFilters
+    clearFilters,
+    showToast
 }) => {
     const { user } = useAuth();
     const {
         selectedBulkProduct,
         closeBulkModal,
         addBulkToCart,
+        addToCart,
         cartCount,
         isCartAnimating
     } = useCart();
@@ -91,10 +93,14 @@ export const MainLayout = ({
                 categories={categories}
                 onCategorySelect={handleCategoryClick}
                 onProductSelect={handleOpenProduct}
+                addToCart={addToCart}
+                showToast={showToast}
             />
 
             <main style={{ padding: '1rem', paddingBottom: '100px', paddingTop: '90px', flex: 1 }}>
-                <Outlet />
+                <div key={location.pathname} className="animate-page-enter">
+                    <Outlet />
+                </div>
             </main>
 
             <BottomNav

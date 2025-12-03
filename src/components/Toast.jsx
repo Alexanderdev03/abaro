@@ -1,46 +1,59 @@
-import React, { useEffect } from 'react';
-import { CheckCircle, XCircle, Info } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Check, X, Info } from 'lucide-react';
+import '../styles/animations.css';
 
-export function Toast({ message, type = 'success', onClose, duration = 2000 }) {
+export function Toast({ message, type = 'success', onClose, duration = 3000 }) {
+    const [isVisible, setIsVisible] = useState(true);
+
     useEffect(() => {
         const timer = setTimeout(() => {
-            onClose();
+            setIsVisible(false);
+            setTimeout(onClose, 300); // Wait for exit animation
         }, duration);
+
         return () => clearTimeout(timer);
-    }, [message, duration]); // Reset timer when message changes
+    }, [duration, onClose]);
 
-    const icons = {
-        success: <CheckCircle size={20} />,
-        error: <XCircle size={20} />,
-        info: <Info size={20} />
-    };
+    if (!message) return null;
 
-    const colors = {
-        success: '#4caf50',
-        error: '#f44336',
-        info: '#2196f3'
+    const bgColors = {
+        success: 'rgba(22, 163, 74, 0.9)',
+        error: 'rgba(220, 38, 38, 0.9)',
+        info: 'rgba(37, 99, 235, 0.9)'
     };
 
     return (
-        <div style={{
-            position: 'fixed',
-            top: '90px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            backgroundColor: '#333',
-            color: 'white',
-            padding: '12px 24px',
-            borderRadius: '50px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            zIndex: 10000,
-            animation: 'slideDown 0.3s ease-out',
-            minWidth: '300px',
-            justifyContent: 'center'
-        }}>
-            <span style={{ color: colors[type] }}>{icons[type]}</span>
+        <div
+            className="glass-panel"
+            style={{
+                position: 'fixed',
+                bottom: '80px', // Above bottom nav
+                left: '50%',
+                transform: `translateX(-50%) ${isVisible ? 'translateY(0)' : 'translateY(20px)'}`,
+                opacity: isVisible ? 1 : 0,
+                transition: 'all 0.3s ease',
+                zIndex: 2000,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 20px',
+                borderRadius: '50px',
+                backgroundColor: bgColors[type] || bgColors.success,
+                color: 'white',
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                minWidth: '300px',
+                maxWidth: '90vw',
+                backdropFilter: 'blur(12px)'
+            }}
+        >
+            <div style={{
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                borderRadius: '50%',
+                padding: '4px',
+                display: 'flex'
+            }}>
+                {type === 'error' ? <X size={16} /> : <Check size={16} />}
+            </div>
             <span style={{ fontWeight: '500', fontSize: '0.95rem' }}>{message}</span>
         </div>
     );

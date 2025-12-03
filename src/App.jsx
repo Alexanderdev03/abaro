@@ -366,6 +366,39 @@ function App() {
     return <LoginModal />;
   }
 
+
+
+  const handleAddToCartWithAnimation = (product, event) => {
+    addToCart(product);
+
+    if (event) {
+      const imgElement = event.currentTarget.closest('.product-card')?.querySelector('img');
+      const startRect = imgElement ? imgElement.getBoundingClientRect() : event.target.getBoundingClientRect();
+
+      // Target: Bottom Nav Cart Icon (approximate position if not found)
+      const cartIcon = document.querySelector('.bottom-nav-cart-icon');
+      const targetRect = cartIcon ? cartIcon.getBoundingClientRect() : { left: window.innerWidth / 2, top: window.innerHeight - 50 };
+
+      // Calculate relative distance
+      const deltaX = targetRect.left - startRect.left + (targetRect.width / 2) - (startRect.width / 2);
+      const deltaY = targetRect.top - startRect.top + (targetRect.height / 2) - (startRect.height / 2);
+
+      setFlyingItem({
+        image: product.image,
+        x: startRect.left,
+        y: startRect.top,
+        width: startRect.width,
+        height: startRect.height,
+        style: {
+          '--target-x': `${deltaX}px`,
+          '--target-y': `${deltaY}px`
+        }
+      });
+
+      setTimeout(() => setFlyingItem(null), 800); // Match animation duration
+    }
+  };
+
   return (
     <>
       <Suspense fallback={
@@ -387,6 +420,7 @@ function App() {
               handleCategoryClick={handleCategoryClick}
               handleOpenProduct={setSelectedProduct}
               clearFilters={clearFilters}
+              showToast={showToast}
             />
           }>
             <Route index element={
@@ -408,7 +442,10 @@ function App() {
                   else if (tab === 'combos') navigate('/combos');
                   else navigate('/' + tab);
                 }}
-                addToCart={addToCart}
+                addToCart={(product) => {
+                  addToCart(product);
+                  showToast(`Agregado: ${product.name}`);
+                }}
                 favorites={favorites}
                 toggleFavorite={toggleFavorite}
                 handleOpenProduct={setSelectedProduct}
@@ -417,6 +454,7 @@ function App() {
                 setSortOrder={setSortOrder}
                 bestSellers={bestSellers}
                 handleAddCombo={addComboToCart}
+                storeSettings={storeSettings}
               />
             } />
             <Route path="cart" element={
@@ -473,7 +511,10 @@ function App() {
                 handleCategoryClick={handleCategoryClick}
                 searchQuery={searchQuery}
                 filteredProducts={filteredProducts}
-                addToCart={addToCart}
+                addToCart={(product) => {
+                  addToCart(product);
+                  showToast(`Agregado: ${product.name}`);
+                }}
                 handleOpenProduct={setSelectedProduct}
                 favorites={favorites}
                 toggleFavorite={toggleFavorite}
@@ -534,24 +575,11 @@ function App() {
         />
       )}
 
-      {flyingItem && (
-        <img
-          src={flyingItem.image}
-          alt=""
-          style={{
-            position: 'fixed',
-            left: flyingItem.x,
-            top: flyingItem.y,
-            width: '50px',
-            height: '50px',
-            objectFit: 'contain',
-            borderRadius: '50%',
-            pointerEvents: 'none',
-            zIndex: 9999,
-            animation: 'flyToCart 0.8s cubic-bezier(0.2, 1, 0.3, 1) forwards'
-          }}
-        />
-      )}
+
+
+      // ... (rest of render) ...
+
+
 
       {toast && (
         <Toast

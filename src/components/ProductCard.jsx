@@ -9,12 +9,7 @@ export function ProductCard({ product, onAdd, isFavorite, onToggleFavorite, onCl
             className="product-card animate-scale-in"
         >
             {/* Badges */}
-            <div style={{
-                position: 'absolute',
-                top: '0.75rem',
-                left: '0.75rem',
-                zIndex: 10
-            }}>
+            <div className="product-card-badge-container">
                 <button
                     className="product-card-favorite-btn"
                     onClick={(e) => {
@@ -70,7 +65,7 @@ export function ProductCard({ product, onAdd, isFavorite, onToggleFavorite, onCl
                 )}
 
                 <button
-                    className="product-card-add-btn"
+                    className="product-card-add-btn btn-premium"
                     onClick={(e) => {
                         e.stopPropagation();
                         onAdd(product);

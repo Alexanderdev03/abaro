@@ -4,7 +4,7 @@ import { ConfirmationModal } from '../ConfirmationModal';
 
 export function AdminContent() {
     const [banners, setBanners] = useState([]);
-    const [flyer, setFlyer] = useState(null);
+    const [flyers, setFlyers] = useState([]);
     const [editingBanner, setEditingBanner] = useState(null);
 
     // Banner Form State
@@ -36,12 +36,12 @@ export function AdminContent() {
     const loadContent = async () => {
         try {
             const { ContentService } = await import('../../services/content');
-            const [bannersData, flyerData] = await Promise.all([
+            const [bannersData, flyersData] = await Promise.all([
                 ContentService.getBanners(),
-                ContentService.getFlyer()
+                ContentService.getFlyers()
             ]);
             setBanners(bannersData);
-            setFlyer(flyerData);
+            setFlyers(flyersData);
         } catch (error) {
             console.error("Error loading content:", error);
         }
@@ -154,16 +154,35 @@ export function AdminContent() {
             const { StorageService } = await import('../../services/storage');
 
             const imageUrl = await StorageService.uploadFile(file, 'flyers');
-            await ContentService.saveFlyer({ imageUrl, updatedAt: new Date().toISOString() });
+            await ContentService.addFlyer({ imageUrl, createdAt: new Date().toISOString() });
 
             loadContent();
-            alert('Folleto actualizado correctamente');
+            alert('Página de folleto agregada correctamente');
         } catch (error) {
             console.error(error);
             alert('Error al subir el folleto');
         } finally {
             setIsUploading(false);
         }
+    };
+
+    const handleDeleteFlyer = (id) => {
+        setModalConfig({
+            isOpen: true,
+            title: '¿Eliminar página?',
+            message: '¿Estás seguro de eliminar esta página del folleto?',
+            isDanger: true,
+            confirmText: 'Sí, eliminar',
+            onConfirm: async () => {
+                try {
+                    const { ContentService } = await import('../../services/content');
+                    await ContentService.deleteFlyer(id);
+                    loadContent();
+                } catch (error) {
+                    alert('Error al eliminar el folleto');
+                }
+            }
+        });
     };
 
     return (
@@ -377,21 +396,26 @@ export function AdminContent() {
             {/* Flyer Section */}
             <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                 <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 'bold' }}>Folleto Digital</h3>
+                <p style={{ color: '#6b7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                    Sube las imágenes de tu folleto. Se mostrarán en orden.
+                </p>
 
-                <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-                    {/* Upload Area */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1.5rem' }}>
+                    {/* Upload New */}
                     <div
                         onClick={() => flyerFileInputRef.current.click()}
                         style={{
-                            flex: 1,
-                            minWidth: '250px',
                             border: '2px dashed #d1d5db',
                             borderRadius: '12px',
-                            padding: '3rem',
+                            padding: '2rem',
                             textAlign: 'center',
                             cursor: isUploading ? 'not-allowed' : 'pointer',
                             backgroundColor: '#f9fafb',
-                            transition: 'all 0.2s'
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: '250px'
                         }}
                     >
                         <input
@@ -402,47 +426,51 @@ export function AdminContent() {
                             style={{ display: 'none' }}
                             disabled={isUploading}
                         />
-                        <Upload size={48} color="#9ca3af" style={{ marginBottom: '1rem' }} />
-                        <p style={{ color: '#4b5563', fontWeight: '600', marginBottom: '0.5rem' }}>
-                            {isUploading ? 'Subiendo...' : 'Subir Nuevo Folleto'}
-                        </p>
-                        <p style={{ color: '#9ca3af', fontSize: '0.9rem' }}>
-                            Haz clic para seleccionar una imagen (JPG, PNG)
+                        <Upload size={32} color="#9ca3af" style={{ marginBottom: '1rem' }} />
+                        <p style={{ color: '#4b5563', fontWeight: '600', fontSize: '0.9rem' }}>
+                            {isUploading ? 'Subiendo...' : 'Agregar Página'}
                         </p>
                     </div>
 
-                    {/* Preview Area */}
-                    <div style={{ flex: 1, minWidth: '250px' }}>
-                        <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.95rem', color: '#6b7280' }}>Folleto Actual</h4>
-                        {flyer ? (
-                            <div style={{
-                                borderRadius: '12px',
-                                overflow: 'hidden',
-                                border: '1px solid #e5e7eb',
-                                height: '300px',
-                                backgroundColor: '#f3f4f6'
-                            }}>
-                                <img
-                                    src={flyer.imageUrl}
-                                    alt="Folleto Actual"
-                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                />
-                            </div>
-                        ) : (
-                            <div style={{
-                                borderRadius: '12px',
-                                border: '1px solid #e5e7eb',
-                                height: '300px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: '#9ca3af',
-                                backgroundColor: '#f9fafb'
-                            }}>
-                                No hay folleto activo
-                            </div>
-                        )}
-                    </div>
+                    {/* Existing Flyers */}
+                    {flyers.map((flyerItem) => (
+                        <div key={flyerItem.id} style={{
+                            borderRadius: '12px',
+                            overflow: 'hidden',
+                            border: '1px solid #e5e7eb',
+                            position: 'relative',
+                            height: '250px',
+                            backgroundColor: '#f3f4f6'
+                        }}>
+                            <img
+                                src={flyerItem.imageUrl}
+                                alt="Folleto"
+                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                            />
+                            <button
+                                onClick={() => handleDeleteFlyer(flyerItem.id)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '8px',
+                                    right: '8px',
+                                    backgroundColor: 'rgba(255,255,255,0.9)',
+                                    color: '#ef4444',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    width: '32px',
+                                    height: '32px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                }}
+                                title="Eliminar página"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>

@@ -61,7 +61,7 @@ export function CombosGrid({ onAddCombo, onBack }) {
                                 fontSize: '0.7rem',
                                 fontWeight: 'bold'
                             }}>
-                                -${(combo.originalPrice - combo.price).toFixed(0)}
+                                -${(Number(combo.originalPrice) - Number(combo.price)).toFixed(0)}
                             </div>
                         </div>
 
@@ -72,10 +72,10 @@ export function CombosGrid({ onAddCombo, onBack }) {
                             <div style={{ marginTop: 'auto' }}>
                                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.5rem' }}>
                                     <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                                        ${combo.price.toFixed(2)}
+                                        ${Number(combo.price).toFixed(2)}
                                     </span>
                                     <span style={{ textDecoration: 'line-through', color: '#999', fontSize: '0.8rem' }}>
-                                        ${combo.originalPrice.toFixed(2)}
+                                        ${Number(combo.originalPrice).toFixed(2)}
                                     </span>
                                 </div>
 

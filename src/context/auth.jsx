@@ -23,22 +23,11 @@ export function AuthProvider({ children }) {
                     email: firebaseUser.email,
                     photoURL: firebaseUser.photoURL,
                     role: 'client',
-                    wallet: 0
+                    // Initialize with safe defaults but mark as initial
+                    wallet: 0,
+                    coupons: [],
+                    _isInitial: true // Flag to prevent syncing this empty state to DB
                 };
-
-                const savedUser = localStorage.getItem('user');
-                if (savedUser) {
-                    try {
-                        const parsed = JSON.parse(savedUser);
-                        if (parsed.email === appUser.email) {
-                            appUser.role = parsed.role || 'client';
-                            appUser.wallet = parsed.wallet || 0;
-                            appUser.coupons = parsed.coupons || [];
-                        }
-                    } catch (e) {
-                        console.error("Error parsing saved user", e);
-                    }
-                }
 
                 // Hardcoded Admin Access
                 if (appUser.email && appUser.email.toLowerCase() === 'alexanderdayanperazacasanova@gmail.com') {
@@ -46,7 +35,6 @@ export function AuthProvider({ children }) {
                 }
 
                 setUser(appUser);
-                localStorage.setItem('user', JSON.stringify(appUser));
             } else {
                 setUser(null);
                 localStorage.removeItem('user');
@@ -71,13 +59,13 @@ export function AuthProvider({ children }) {
                                 const updatedUser = {
                                     ...prev,
                                     ...userData,
-                                    // Ensure critical fields are preserved if missing in DB
                                     role: userData.role || prev.role,
-                                    // Prefer DB value if defined, otherwise keep local (prevents overwriting with 0 if missing)
                                     wallet: userData.wallet !== undefined ? userData.wallet : (prev.wallet || 0),
                                     coupons: userData.coupons || []
                                 };
-                                // Update local storage with the FRESH updatedUser
+                                // Remove _isInitial since we now have real data
+                                delete updatedUser._isInitial;
+
                                 localStorage.setItem('user', JSON.stringify(updatedUser));
                                 return updatedUser;
                             });
@@ -87,13 +75,14 @@ export function AuthProvider({ children }) {
                 });
             });
         }
-    }, [user?.email]); // Only re-subscribe if email changes
+    }, [user?.email]);
 
     // Sync user to Firestore whenever it changes LOCALLY
     useEffect(() => {
         if (user) {
-            if (isRemoteUpdate.current) {
-                isRemoteUpdate.current = false; // Reset flag and skip sync
+            // Don't sync if it's a remote update OR if it's the initial empty state
+            if (isRemoteUpdate.current || user._isInitial) {
+                isRemoteUpdate.current = false;
                 return;
             }
             import('../services/users').then(({ UserService }) => {

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Save, Bell, Shield, Database, Upload, Download, Clock, Palette, Image as ImageIcon, Trash2, AlertTriangle } from 'lucide-react';
+import { Save, Bell, Shield, Database, Upload, Download, Clock, Palette, Image as ImageIcon, Trash2, AlertTriangle, Eye } from 'lucide-react';
 import { Toast } from '../Toast';
 import { ContentService } from '../../services/content';
 import { ProductService } from '../../services/products';
@@ -24,6 +24,11 @@ export function AdminSettings() {
         notifications: {
             orders: true,
             stock: true
+        },
+        visibility: {
+            combos: true,
+            flashSale: true,
+            flyer: true
         }
     });
 
@@ -38,13 +43,24 @@ export function AdminSettings() {
     const [confirmInput, setConfirmInput] = useState('');
 
     useEffect(() => {
+        const loadSettings = (savedData) => {
+            setSettings(prev => ({
+                ...prev,
+                ...savedData,
+                // Ensure nested objects are merged, not replaced
+                notifications: { ...prev.notifications, ...savedData?.notifications },
+                visibility: { ...prev.visibility, ...savedData?.visibility },
+                hours: { ...prev.hours, ...savedData?.hours }
+            }));
+        };
+
         const savedSettings = localStorage.getItem('storeSettings');
         if (savedSettings) {
-            setSettings(JSON.parse(savedSettings));
+            loadSettings(JSON.parse(savedSettings));
         } else {
             // Try to load from Firestore if not in local storage
             ContentService.getSettings().then(data => {
-                if (data) setSettings(data);
+                if (data) loadSettings(data);
             });
         }
     }, []);
@@ -377,18 +393,44 @@ export function AdminSettings() {
                 </div>
             </div>
 
-            <button
-                onClick={handleSave}
-                style={{
-                    marginTop: '2rem',
-                    backgroundColor: '#3b82f6', color: 'white', border: 'none',
-                    padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: '0.5rem', width: 'fit-content'
-                }}
-            >
-                <Save size={18} />
-                Guardar Cambios
-            </button>
+
+
+            {/* Visibility Settings */}
+            <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                    <Eye size={20} color="#8b5cf6" />
+                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold' }}>Visibilidad de Secciones</h3>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem', borderRadius: '8px', backgroundColor: '#f9fafb' }}>
+                        <input
+                            type="checkbox"
+                            checked={settings.visibility?.combos ?? true}
+                            onChange={(e) => handleNestedChange('visibility', 'combos', e.target.checked)}
+                            style={{ width: '18px', height: '18px' }}
+                        />
+                        <span style={{ fontSize: '0.9rem', color: '#374151', fontWeight: '500' }}>Mostrar Combos</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem', borderRadius: '8px', backgroundColor: '#f9fafb' }}>
+                        <input
+                            type="checkbox"
+                            checked={settings.visibility?.flashSale ?? true}
+                            onChange={(e) => handleNestedChange('visibility', 'flashSale', e.target.checked)}
+                            style={{ width: '18px', height: '18px' }}
+                        />
+                        <span style={{ fontSize: '0.9rem', color: '#374151', fontWeight: '500' }}>Mostrar Pasillo Sorpresa</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem', borderRadius: '8px', backgroundColor: '#f9fafb' }}>
+                        <input
+                            type="checkbox"
+                            checked={settings.visibility?.flyer ?? true}
+                            onChange={(e) => handleNestedChange('visibility', 'flyer', e.target.checked)}
+                            style={{ width: '18px', height: '18px' }}
+                        />
+                        <span style={{ fontSize: '0.9rem', color: '#374151', fontWeight: '500' }}>Mostrar Folleto</span>
+                    </label>
+                </div>
+            </div>
 
             {/* Notifications & Security */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
@@ -430,6 +472,20 @@ export function AdminSettings() {
                     </button>
                 </div>
             </div>
+
+            <button
+                onClick={handleSave}
+                style={{
+                    marginTop: '1rem',
+                    backgroundColor: '#3b82f6', color: 'white', border: 'none',
+                    padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '0.5rem', width: 'fit-content',
+                    alignSelf: 'flex-end'
+                }}
+            >
+                <Save size={18} />
+                Guardar Cambios
+            </button>
 
             {/* Database Management */}
             <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>

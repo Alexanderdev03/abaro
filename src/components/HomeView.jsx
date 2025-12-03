@@ -33,7 +33,8 @@ export function HomeView({
     sortOrder,
     setSortOrder,
     bestSellers,
-    handleAddCombo
+    handleAddCombo,
+    storeSettings
 }) {
     return (
         <>
@@ -147,11 +148,13 @@ export function HomeView({
                     </div>
 
                     {/* Secondary Sections */}
-                    <FlashSale onAdd={addToCart} />
-                    <ComboSection onAddCombo={handleAddCombo} onSeeAll={() => handleTabChange('combos')} />
-                    <div style={{ marginTop: '2rem' }}>
-                        <Flyer />
-                    </div>
+                    {(storeSettings?.visibility?.flashSale ?? true) && <FlashSale onAdd={addToCart} />}
+                    {(storeSettings?.visibility?.combos ?? true) && <ComboSection onAddCombo={handleAddCombo} onSeeAll={() => handleTabChange('combos')} />}
+                    {(storeSettings?.visibility?.flyer ?? true) && (
+                        <div style={{ marginTop: '2rem' }}>
+                            <Flyer />
+                        </div>
+                    )}
                 </>
             )}
 
@@ -248,15 +251,20 @@ export function HomeView({
                             ))
                         ) : (
                             visibleProducts.map((product, index) => (
-                                <ProductCard
+                                <div
                                     key={product.id}
-                                    product={product}
-                                    onAdd={addToCart}
-                                    isFavorite={favorites.some(fav => fav.id === product.id)}
-                                    onToggleFavorite={() => toggleFavorite(product)}
-                                    onClick={() => handleOpenProduct(product)}
-                                    priority={index < 4}
-                                />
+                                    className={`animate-slide-up delay-${Math.min(index * 50, 300)}`}
+                                    style={{ animationFillMode: 'both' }}
+                                >
+                                    <ProductCard
+                                        product={product}
+                                        onAdd={addToCart}
+                                        isFavorite={favorites.some(fav => fav.id === product.id)}
+                                        onToggleFavorite={() => toggleFavorite(product)}
+                                        onClick={() => handleOpenProduct(product)}
+                                        priority={index < 4}
+                                    />
+                                </div>
                             ))
                         )}
                     </div>

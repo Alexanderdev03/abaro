@@ -11,24 +11,42 @@ export const SYNONYMS = {
     'verdura': 'verduras',
     'carne': 'carniceria',
     'pollo': 'carniceria',
+    'bistec': 'carniceria',
+    'milanesa': 'carniceria',
     'jabon': 'limpieza',
     'detergente': 'limpieza',
+    'cloro': 'limpieza',
+    'suavitel': 'limpieza',
+    'fabuloso': 'limpieza',
     'papel': 'higienico',
     'leche': 'lacteos',
     'queso': 'lacteos',
     'yogurt': 'lacteos',
+    'crema': 'lacteos',
+    'mantequilla': 'lacteos',
     'pan': 'panaderia',
     'bolillo': 'panaderia',
     'dulce': 'dulces',
     'golosina': 'dulces',
     'cerveza': 'alcohol',
-    'caguama': 'cerveza',
+    'caguama': 'alcohol',
     'pisto': 'alcohol',
     'chupe': 'alcohol',
     'botana': 'sabritas',
     'galletas': 'galleta',
     'jugo': 'bebidas',
-    'agua': 'bebidas'
+    'agua': 'bebidas',
+    'jitomate': 'tomate',
+    'tomate': 'jitomate',
+    'platano': 'frutas',
+    'banana': 'frutas',
+    'frijol': 'granos',
+    'arroz': 'granos',
+    'pasta': 'sopas',
+    'sopa': 'pastas',
+    'jamon': 'embutidos',
+    'salchicha': 'embutidos',
+    'cigarros': 'tabaco'
 };
 
 /**
@@ -40,11 +58,6 @@ export const processSearchQuery = (query) => {
     if (!query) return '';
 
     const lowerQuery = query.toLowerCase();
-
-    // Verificar si la consulta completa es un sinónimo
-    if (SYNONYMS[lowerQuery]) {
-        return SYNONYMS[lowerQuery];
-    }
 
     // Verificar palabra por palabra (simple)
     return lowerQuery.split(' ').map(word => SYNONYMS[word] || word).join(' ');
@@ -65,7 +78,9 @@ export const createFuseInstance = (products) => {
         ],
         threshold: 0.3, // 0.0 = coincidencia exacta, 1.0 = coincidencia muy laxa
         distance: 100,
+        minMatchCharLength: 2, // Ignorar búsquedas de 1 letra
         includeScore: true,
-        ignoreLocation: true // Buscar en cualquier parte del string
+        ignoreLocation: true, // Buscar en cualquier parte del string
+        ignoreDiacritics: true // Ignorar acentos (Lácteos == lacteos)
     });
 };

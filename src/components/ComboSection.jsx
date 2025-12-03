@@ -58,9 +58,9 @@ export function ComboSection({ onAddCombo, onSeeAll }) {
                         display: 'flex',
                         flexDirection: 'column'
                     }}>
-                        {combo.imageUrl && (
+                        {combo.image && (
                             <div style={{ height: '140px', overflow: 'hidden' }}>
-                                <img src={combo.imageUrl} alt={combo.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <img src={combo.image} alt={combo.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             </div>
                         )}
                         <div style={{ padding: '1rem', flex: 1, display: 'flex', flexDirection: 'column' }}>

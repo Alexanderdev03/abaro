@@ -66,7 +66,7 @@ export function BottomNav({ activeTab, onTabChange, cartCount, isAnimating, user
         <div style={{ position: 'relative' }}>
           <ShoppingCart
             size={24}
-            className={isAnimating ? 'cart-shake' : ''}
+            className={`bottom-nav-cart-icon ${isAnimating ? 'cart-shake' : ''}`}
           />
           {cartCount > 0 && (
             <span style={{

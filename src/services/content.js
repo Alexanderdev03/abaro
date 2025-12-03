@@ -124,29 +124,36 @@ export const ContentService = {
         }
     },
 
-    // --- Flyer ---
-    getFlyer: async () => {
+    // --- Flyers ---
+    getFlyers: async () => {
         try {
-            const docRef = doc(db, "content", "flyer");
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                return docSnap.data();
-            } else {
-                return null;
-            }
+            const querySnapshot = await getDocs(collection(db, "flyers"));
+            return querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
         } catch (error) {
-            console.error("Error fetching flyer:", error);
-            return null;
+            console.error("Error fetching flyers:", error);
+            return [];
         }
     },
 
-    saveFlyer: async (flyerData) => {
+    addFlyer: async (flyerData) => {
         try {
-            // flyerData should contain { imageUrl: '...' }
-            await setDoc(doc(db, "content", "flyer"), flyerData);
+            const docRef = await addDoc(collection(db, "flyers"), flyerData);
+            return { id: docRef.id, ...flyerData };
+        } catch (error) {
+            console.error("Error adding flyer:", error);
+            throw error;
+        }
+    },
+
+    deleteFlyer: async (id) => {
+        try {
+            await deleteDoc(doc(db, "flyers", id));
             return true;
         } catch (error) {
-            console.error("Error saving flyer:", error);
+            console.error("Error deleting flyer:", error);
             throw error;
         }
     },
