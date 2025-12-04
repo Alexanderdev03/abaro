@@ -6,7 +6,7 @@ import { LoginModal } from './components/LoginModal';
 import { Toast } from './components/Toast';
 import { StoreMap } from './components/StoreMap';
 // Lazy loaded components
-const AdminRouter = React.lazy(() => import('./components/admin/AdminRouter').then(module => ({ default: module.AdminRouter })));
+
 const Account = React.lazy(() => import('./components/Account').then(module => ({ default: module.Account })));
 const CombosGrid = React.lazy(() => import('./components/CombosGrid').then(module => ({ default: module.CombosGrid })));
 const CategoriesView = React.lazy(() => import('./components/CategoriesView').then(module => ({ default: module.CategoriesView })));
@@ -566,12 +566,12 @@ function App() {
                 onToggleFavorite={toggleFavorite}
                 onAddToCart={addToCart}
                 onProductSelect={setSelectedProduct}
-                onNavigateToAdmin={() => navigate('/admin')}
+
               />
             } />
           </Route>
 
-          <Route path="/admin/*" element={<AdminRouter />} />
+
         </Routes>
       </Suspense>
 
