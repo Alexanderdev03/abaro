@@ -164,7 +164,7 @@ export function ProductDetails({ product, products, onClose, onAdd, isFavorite, 
                     {product.name}
                 </h1>
 
-                {product.bonusPoints && (
+                {product.bonusPoints > 0 && (
                     <div style={{
                         fontSize: '0.9rem',
                         color: '#e65100',

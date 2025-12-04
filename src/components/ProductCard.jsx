@@ -58,7 +58,7 @@ export function ProductCard({ product, onAdd, isFavorite, onToggleFavorite, onCl
                     ${product.price.toFixed(2)}
                 </div>
 
-                {product.bonusPoints && (
+                {product.bonusPoints > 0 && (
                     <div className="product-card-bonus">
                         <span>+{product.bonusPoints} Puntos</span>
                     </div>

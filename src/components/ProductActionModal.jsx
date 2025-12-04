@@ -106,7 +106,7 @@ export function ProductActionModal({ product, onClose, onAdd, products, onProduc
                         }}>
                             Precio unitario: ${product.price.toFixed(2)}
                         </div>
-                        {product.bonusPoints && (
+                        {product.bonusPoints > 0 && (
                             <div style={{
                                 fontSize: '0.8rem',
                                 color: '#e65100',
