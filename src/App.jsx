@@ -18,6 +18,7 @@ import { AuthProvider, useAuth } from './context/auth.jsx';
 import { CartProvider, useCart } from './context/cart.jsx';
 
 import { OrderService } from './services/orders';
+import { UserService } from './services/users';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { MainLayout } from './layouts/MainLayout';
 import { useAppData } from './hooks/useAppData';
@@ -50,7 +51,12 @@ function App() {
     filteredProducts,
     filteredCategories,
     visibleProducts,
-    clearFilters
+    clearFilters,
+    searchHistory,
+    addToHistory,
+    removeFromHistory,
+    clearHistory,
+    suggestions
   } = useProductSearch(products, categories);
 
   // Cart Context
@@ -68,23 +74,13 @@ function App() {
   const { user, logout, setUser } = useAuth();
 
   // Local State
-  const [favorites, setFavorites] = useState(() => {
-    const saved = localStorage.getItem('favorites');
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  const [favorites, setFavorites] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
-  const [orders, setOrders] = useState(() => {
-    const saved = localStorage.getItem('orders');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [orders, setOrders] = useState([]);
 
   // Saved Lists State
-  const [savedLists, setSavedLists] = useState(() => {
-    const saved = localStorage.getItem('savedLists');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [savedLists, setSavedLists] = useState([]);
   const [isSavingList, setIsSavingList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [listName, setListName] = useState('');
@@ -103,8 +99,19 @@ function App() {
 
   // Effects
   useEffect(() => {
-    localStorage.setItem('orders', JSON.stringify(orders));
-  }, [orders]);
+    if (user?.email) {
+      // Cargar datos del usuario desde Firebase usando Email como ID
+      UserService.getUserData(user.email).then(userData => {
+        if (userData) {
+          if (userData.favorites) setFavorites(userData.favorites);
+          if (userData.savedLists) setSavedLists(userData.savedLists);
+        }
+      });
+      UserService.getOrders(user.email).then(userOrders => {
+        setOrders(userOrders);
+      });
+    }
+  }, [user?.email]);
 
   // Handlers
   const showToast = (message, type = 'success') => {
@@ -231,10 +238,17 @@ function App() {
     }
 
     showToast('Guardando pedido en la nube...', 'info');
+
+    // Guardar en la colección general de pedidos (si existe)
     OrderService.createOrder(newOrder)
       .then(id => {
         console.log("Order saved to Firebase with ID:", id);
-        showToast('¡Pedido guardado en la nube!', 'success');
+        // Guardar en el historial del usuario
+        if (user?.email) {
+          UserService.addOrder(user.email, newOrder).then(() => {
+            showToast('¡Pedido guardado en tu historial!', 'success');
+          });
+        }
       })
       .catch(err => {
         console.error("Failed to save order to Firebase:", err);
@@ -292,7 +306,10 @@ function App() {
         newFavorites = [...prev, product];
         showToast('Agregado a favoritos');
       }
-      localStorage.setItem('favorites', JSON.stringify(newFavorites));
+
+      if (user?.email) {
+        UserService.updateFavorites(user.email, newFavorites);
+      }
       return newFavorites;
     });
   };
@@ -315,7 +332,11 @@ function App() {
     };
     const updatedLists = [...savedLists, newList];
     setSavedLists(updatedLists);
-    localStorage.setItem('savedLists', JSON.stringify(updatedLists));
+
+    if (user?.email) {
+      UserService.updateSavedLists(user.email, updatedLists);
+    }
+
     setIsSavingList(false);
     showToast('Lista guardada correctamente');
   };
@@ -328,7 +349,10 @@ function App() {
   const deleteList = (id) => {
     const updatedLists = savedLists.filter(l => l.id !== id);
     setSavedLists(updatedLists);
-    localStorage.setItem('savedLists', JSON.stringify(updatedLists));
+
+    if (user?.email) {
+      UserService.updateSavedLists(user.email, updatedLists);
+    }
     showToast('Lista eliminada');
   };
 
@@ -421,6 +445,7 @@ function App() {
               handleOpenProduct={setSelectedProduct}
               clearFilters={clearFilters}
               showToast={showToast}
+              addToHistory={addToHistory}
             />
           }>
             <Route index element={
@@ -455,6 +480,14 @@ function App() {
                 bestSellers={bestSellers}
                 handleAddCombo={addComboToCart}
                 storeSettings={storeSettings}
+                searchHistory={searchHistory}
+                onHistorySelect={(term) => {
+                  setSearchQuery(term);
+                  addToHistory(term);
+                }}
+                onHistoryRemove={removeFromHistory}
+                onHistoryClear={clearHistory}
+                suggestions={suggestions}
               />
             } />
             <Route path="cart" element={
